@@ -1,4 +1,4 @@
-package JavaBeta; // Make sure this matches your actual package name
+package JavaBeta;
 
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
@@ -31,7 +31,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -44,7 +43,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Ao3Controller {

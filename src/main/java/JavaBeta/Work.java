@@ -1,6 +1,5 @@
 package JavaBeta;
 
-import java.util.List;
 
 public class Work {
     private final String title;
@@ -21,8 +20,6 @@ public class Work {
     public String getTitle() { return title; }
     public String getAuthor() { return author; }
     public String getUrl() { return url; }
-    public String getTags() { return tags; }             // Added Getter
-    public String getLastUpdated() { return lastUpdated; } // Added Getter
 
     @Override
     public String toString() {
