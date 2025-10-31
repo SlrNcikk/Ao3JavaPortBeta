@@ -9,16 +9,69 @@ public class SpotifyController {
     @FXML private Button playButton;
     @FXML private Button pauseButton;
     @FXML private Button nextButton;
-    @FXML private Button prevButton;
+    @FXML private Button previousButton;
     @FXML private Label currentTrackLabel;
+    @FXML private Button loginButton;
 
     @FXML
     private void initialize() {
         refreshTrackInfo();
+
+        playButton.setOnAction(e -> {
+            try {
+                SpotifyService.play();
+                refreshTrackInfo();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        pauseButton.setOnAction(e -> {
+            try {
+                SpotifyService.pause();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        nextButton.setOnAction(e -> {
+            try {
+                SpotifyService.nextTrack();
+                refreshTrackInfo();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        previousButton.setOnAction(e -> {
+            try {
+                SpotifyService.previousTrack();
+                refreshTrackInfo();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
     }
+    @FXML
+    private Label trackLabel;
 
     @FXML
-    private void onPlayClicked() {
+    private void onLogin() {
+        try {
+            SpotifyService.authenticate();
+            loginButton.setText("Logged In!");
+            loginButton.setDisable(true);
+            refreshTrackInfo(); // Try to get track info right after login
+        } catch (Exception e) {
+            e.printStackTrace();
+            currentTrackLabel.setText("Login failed.");
+        }
+    }
+
+
+    @FXML
+    private void onPlay() {
         try {
             SpotifyService.play();
             refreshTrackInfo();
@@ -28,7 +81,7 @@ public class SpotifyController {
     }
 
     @FXML
-    private void onPauseClicked() {
+    private void onPause() {
         try {
             SpotifyService.pause();
             refreshTrackInfo();
@@ -38,7 +91,7 @@ public class SpotifyController {
     }
 
     @FXML
-    private void onNextClicked() {
+    private void onNext() {
         try {
             SpotifyService.nextTrack();
             refreshTrackInfo();
@@ -48,7 +101,7 @@ public class SpotifyController {
     }
 
     @FXML
-    private void onPrevClicked() {
+    private void onPrevious() {
         try {
             SpotifyService.previousTrack();
             refreshTrackInfo();
