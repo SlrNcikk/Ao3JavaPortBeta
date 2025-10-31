@@ -12,6 +12,7 @@ public class SpotifyController {
     @FXML private Button previousButton;
     @FXML private Label currentTrackLabel;
     @FXML private Button loginButton;
+    @FXML private Button refreshButton;
 
     @FXML
     private void initialize() {
@@ -55,6 +56,22 @@ public class SpotifyController {
     }
     @FXML
     private Label trackLabel;
+
+    @FXML
+    private void onRefresh() {
+        // The try...catch block goes INSIDE the method
+        try {
+            // First, find and set the active device ID
+            SpotifyService.findAndSetDeviceId();
+
+            // Then, get the track info
+            refreshTrackInfo();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            currentTrackLabel.setText("Failed to refresh.");
+        }
+    } // <-- This is the correct closing brace for the method
 
     @FXML
     private void onLogin() {

@@ -12,6 +12,12 @@
 
     <Label fx:id="currentTrackLabel" text="Nothing playing..." style="-fx-font-size: 14;" />
 
+    <Button fx:id="refreshButton" text="Refresh" onAction="#onRefresh" />
+
+    <HBox alignment="CENTER" spacing="10">
+
+    </HBox>
+
     <HBox alignment="CENTER" spacing="10">
         <Button fx:id="previousButton" text="⏮ Prev" onAction="#onPrevious" />
         <Button fx:id="playButton" text="▶ Play" onAction="#onPlay" />
