@@ -88,6 +88,21 @@ public class Ao3Controller {
     private String darkThemePath;
 
     @FXML
+    private void openSpotify() {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/SpotifyView.fxml"));
+            Parent root = loader.load();
+
+            Stage stage = new Stage();
+            stage.setTitle("Spotify Player");
+            stage.setScene(new Scene(root));
+            stage.show();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @FXML
     public void initialize() {
         // --- Load Mode Icons ---
         try {

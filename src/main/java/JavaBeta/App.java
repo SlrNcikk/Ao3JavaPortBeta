@@ -25,7 +25,7 @@ public class App extends Application {
 
         // --- APPLY STYLESHEET ---
         // Choose the correct path based on Option A or B from Step 1
-        URL stylesheetUrl = getClass().getResource("/JavaBeta/dark-theme.css"); // Or "/JavaBeta/styles.css"
+        URL stylesheetUrl = getClass().getResource("/JavaBeta/styles.css"); // Or "/JavaBeta/styles.css"
         if (stylesheetUrl != null) {
             scene.getStylesheets().add(stylesheetUrl.toExternalForm());
             System.out.println("DEBUG: Dark theme applied."); // For confirmation

@@ -50,6 +50,7 @@
                             </ImageView>
                         </graphic>
                     </Button>
+                    <Button text="🎵 Spotify" onAction="#openSpotify" />
                     <Button fx:id="settingsButton" mnemonicParsing="false" onAction="#onSettingsButtonClick" style="-fx-background-color: transparent; -fx-padding: 1;">
                         <graphic>
                             <FontIcon fx:id="settingsIcon" iconLiteral="eli-cog" iconSize="24" />
