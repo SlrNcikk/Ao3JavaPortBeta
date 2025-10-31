@@ -6,7 +6,7 @@ import javafx.scene.control.Label;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.util.Duration;
-import java.io.IOException;
+
 
 public class SpotifyController {
 
