@@ -13,14 +13,14 @@ import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.NameValuePair;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.message.BasicNameValuePair;
+import org.apache.hc.core5.http.io.entity.StringEntity;
+import com.sun.net.httpserver.HttpHandler;
 import java.awt.*;
 import java.io.IOException;
 import java.io.OutputStream;
-import com.sun.net.httpserver.HttpHandler;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import org.apache.hc.core5.http.io.entity.StringEntity;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -40,55 +40,40 @@ public class SpotifyService {
         return activeDeviceId;
     }
 
-
-
     public static void authenticate() throws IOException {
-        // Start a server on a new thread to listen for the callback
         new Thread(() -> {
             try {
-                // --- This block is now safer ---
                 server = HttpServer.create(new InetSocketAddress(8888), 0);
 
-                // This is the "listener" using the stable HttpHandler class
                 server.createContext("/callback", new HttpHandler() {
                     @Override
                     public void handle(HttpExchange exchange) throws IOException {
-                        // --- 1. CATCH THE CODE ---
                         String query = exchange.getRequestURI().getQuery();
                         String code = query.split("code=")[1].split("&")[0];
                         System.out.println("Caught authorization code: " + code);
 
-                        // --- 2. SEND A "SUCCESS" MESSAGE TO BROWSER ---
                         String response = "<h1>Success!</h1><p>You can close this tab and return to the app.</p>";
                         exchange.sendResponseHeaders(200, response.getBytes().length);
                         OutputStream os = exchange.getResponseBody();
                         os.write(response.getBytes());
                         os.close();
 
-                        // --- 3. EXCHANGE THE CODE FOR A TOKEN ---
                         exchangeCodeForToken(code);
-
-                        // --- 4. STOP THE SERVER ---
                         new Thread(() -> server.stop(1)).start();
                     }
                 });
 
-                server.setExecutor(null); // creates a default executor
+                server.setExecutor(null);
                 server.start();
                 System.out.println("Local server started on port 8888...");
 
             } catch (IOException e) {
-                System.err.println("!!! Server start failed (port 8888 may be in use) !!!");
+                System.err.println("Server start failed (port 8888 may be in use)");
                 e.printStackTrace();
             }
         }).start();
 
-        // --- OPEN THE BROWSER FOR LOGIN ---
-
-        // --- THIS IS THE FIX for Bug 1 ---
-        // We replaced the space with "%20"
         String scope = "user-modify-playback-state%20user-read-playback-state";
-
         String authUri = AUTH_URL + "?client_id=" + CLIENT_ID +
                 "&response_type=code&redirect_uri=" + REDIRECT_URI +
                 "&scope=" + scope;
@@ -96,85 +81,26 @@ public class SpotifyService {
         Desktop.getDesktop().browse(URI.create(authUri));
     }
 
-    public static void findAndSetDeviceId() throws IOException {
-        if (accessToken == null) {
-            System.err.println("Cannot find device, not logged in.");
-            return;
-        }
-
-        try (CloseableHttpClient client = HttpClients.createDefault()) {
-            HttpGet get = new HttpGet("https://api.spotify.com/v1/me/player/devices");
-            get.setHeader("Authorization", "Bearer " + accessToken);
-
-            String json = client.execute(get, response -> {
-                if (response.getCode() != 200) {
-                    System.err.println("Failed to get devices: " + response.getReasonPhrase());
-                    return null;
-                }
-                return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-            });
-
-            if (json == null) return;
-
-            JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
-            if (obj.has("devices")) {
-                // First try to find an active device
-                for (var deviceElement : obj.getAsJsonArray("devices")) {
-                    JsonObject device = deviceElement.getAsJsonObject();
-                    if (device.has("is_active") && device.get("is_active").getAsBoolean()) {
-                        activeDeviceId = device.get("id").getAsString();
-                        System.out.println("DEBUG: Active Device ID set to: " + activeDeviceId);
-                        return;
-                    }
-                }
-
-                // If no active device, pick the first available device
-                if (obj.getAsJsonArray("devices").size() > 0) {
-                    JsonObject firstDevice = obj.getAsJsonArray("devices").get(0).getAsJsonObject();
-                    activeDeviceId = firstDevice.get("id").getAsString();
-                    System.out.println("DEBUG: No active device, selected first available device: " + activeDeviceId);
-                    return;
-                }
-            }
-
-            // If we get here, no devices found
-            System.err.println("DEBUG: Could not find any Spotify devices.");
-            activeDeviceId = null;
-        }
-    }
-
     private static void exchangeCodeForToken(String code) {
         try (CloseableHttpClient client = HttpClients.createDefault()) {
             HttpPost post = new HttpPost(TOKEN_URL);
 
-            // --- 1. SET HEADERS (Basic Auth) ---
             String credentials = CLIENT_ID + ":" + CLIENT_SECRET;
             String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes());
             post.setHeader("Authorization", "Basic " + encodedCredentials);
             post.setHeader("Content-Type", "application/x-www-form-urlencoded");
 
-            // --- 2. SET BODY (Form data) ---
             List<NameValuePair> form = new ArrayList<>();
             form.add(new BasicNameValuePair("grant_type", "authorization_code"));
             form.add(new BasicNameValuePair("code", code));
             form.add(new BasicNameValuePair("redirect_uri", REDIRECT_URI));
             post.setEntity(new UrlEncodedFormEntity(form));
 
-            // --- 3. EXECUTE REQUEST ---
-            System.out.println("Exchanging code for token...");
-
-            // Execute and get the response as a string
-            String json = client.execute(post, response -> {
-                return EntityUtils.toString(response.getEntity());
-            });
-
-            // --- 4. PARSE TOKEN AND SET IT ---
+            String json = client.execute(post, response -> EntityUtils.toString(response.getEntity()));
             JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
             String token = obj.get("access_token").getAsString();
-
-            setAccessToken(token); // This is your existing method!
+            setAccessToken(token);
             System.out.println("Access Token Acquired!");
-
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -189,15 +115,11 @@ public class SpotifyService {
             System.err.println("No access token, cannot send PUT.");
             return;
         }
-
         try (CloseableHttpClient client = HttpClients.createDefault()) {
             HttpPut put = new HttpPut(url);
             put.setHeader("Authorization", "Bearer " + accessToken);
-            put.setEntity(new StringEntity("", StandardCharsets.UTF_8)); // <-- empty body
-            client.execute(put, response -> {
-                System.out.println("PUT Response: " + response.getCode() + " " + response.getReasonPhrase());
-                return null;
-            });
+            put.setEntity(new StringEntity("", StandardCharsets.UTF_8));
+            client.execute(put, response -> null);
         }
     }
 
@@ -206,96 +128,96 @@ public class SpotifyService {
             System.err.println("No access token, cannot send POST.");
             return;
         }
-
         try (CloseableHttpClient client = HttpClients.createDefault()) {
             HttpPost post = new HttpPost(url);
             post.setHeader("Authorization", "Bearer " + accessToken);
-            post.setEntity(new StringEntity("", StandardCharsets.UTF_8)); // <-- empty body
-            client.execute(post, response -> {
-                System.out.println("POST Response: " + response.getCode() + " " + response.getReasonPhrase());
-                return null;
-            });
+            post.setEntity(new StringEntity("", StandardCharsets.UTF_8));
+            client.execute(post, response -> null);
         }
     }
 
     public static void play() throws IOException {
-        if (activeDeviceId == null) {
-            findAndSetDeviceId();
-            if (activeDeviceId == null) {
-                System.err.println("No active device, cannot play.");
-                return;
-            }
-        }
+        ensureActiveDevice();
         sendPutRequest("https://api.spotify.com/v1/me/player/play?device_id=" + activeDeviceId);
     }
 
     public static void pause() throws IOException {
-        if (activeDeviceId == null) {
-            findAndSetDeviceId();
-            if (activeDeviceId == null) {
-                System.err.println("No active device, cannot pause.");
-                return;
-            }
-        }
+        ensureActiveDevice();
         sendPutRequest("https://api.spotify.com/v1/me/player/pause?device_id=" + activeDeviceId);
     }
 
     public static void nextTrack() throws IOException {
-        if (activeDeviceId == null) {
-            findAndSetDeviceId();
-            if (activeDeviceId == null) {
-                System.err.println("No active device, cannot skip.");
-                return;
-            }
-        }
+        ensureActiveDevice();
         sendPostRequest("https://api.spotify.com/v1/me/player/next?device_id=" + activeDeviceId);
     }
 
     public static void previousTrack() throws IOException {
-        if (activeDeviceId == null) {
-            findAndSetDeviceId();
-            if (activeDeviceId == null) {
-                System.err.println("No active device, cannot go back.");
-                return;
-            }
-        }
+        ensureActiveDevice();
         sendPostRequest("https://api.spotify.com/v1/me/player/previous?device_id=" + activeDeviceId);
     }
 
-    public static String getCurrentTrack() throws IOException {
-        if (accessToken == null) {
-            return "Not logged in";
+    private static void ensureActiveDevice() throws IOException {
+        if (activeDeviceId == null) {
+            findAndSetDeviceId();
+            if (activeDeviceId == null) {
+                throw new IOException("No active device found.");
+            }
         }
+    }
+
+    public static void findAndSetDeviceId() throws IOException {
+        if (accessToken == null) {
+            System.err.println("Cannot find device, not logged in.");
+            return;
+        }
+        try (CloseableHttpClient client = HttpClients.createDefault()) {
+            HttpGet get = new HttpGet("https://api.spotify.com/v1/me/player/devices");
+            get.setHeader("Authorization", "Bearer " + accessToken);
+
+            String json = client.execute(get, response -> {
+                if (response.getCode() != 200) return null;
+                return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+            });
+            if (json == null) return;
+
+            JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+            if (obj.has("devices")) {
+                for (var deviceElement : obj.getAsJsonArray("devices")) {
+                    JsonObject device = deviceElement.getAsJsonObject();
+                    if (device.has("is_active") && device.get("is_active").getAsBoolean()) {
+                        activeDeviceId = device.get("id").getAsString();
+                        return;
+                    }
+                }
+                if (obj.getAsJsonArray("devices").size() > 0) {
+                    activeDeviceId = obj.getAsJsonArray("devices").get(0)
+                            .getAsJsonObject().get("id").getAsString();
+                }
+            }
+        }
+    }
+
+    public static String getCurrentTrack() throws IOException {
+        if (accessToken == null) return "Not logged in";
 
         try (CloseableHttpClient client = HttpClients.createDefault()) {
             HttpGet get = new HttpGet("https://api.spotify.com/v1/me/player/currently-playing");
             get.setHeader("Authorization", "Bearer " + accessToken);
 
             return client.execute(get, response -> {
-                if (response.getCode() == 204) {
-                    return "Nothing playing";
-                }
-                if (response.getCode() != 200) {
-                    System.err.println("Spotify API Error: " + response.getReasonPhrase());
-                    return "Error: " + response.getReasonPhrase();
-                }
+                if (response.getCode() == 204) return "Nothing playing";
+                if (response.getCode() != 200) return "Error: " + response.getReasonPhrase();
 
                 String json = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-                if (json == null || json.isEmpty()) {
-                    return "Nothing playing";
-                }
+                if (json == null || json.isEmpty()) return "Nothing playing";
 
                 JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
 
-                // --- START OF NEW CODE ---
-                // Check for and save the active device ID
-                        if (obj.has("device") && !obj.get("device").isJsonNull()) {
-                            JsonObject device = obj.getAsJsonObject("device");
-                            activeDeviceId = device.get("id").getAsString();
-                            // This new debug line is the one we want to see!
-                            System.out.println("DEBUG (from getCurrentTrack): Active Device ID set to: " + activeDeviceId);
+                // Save active device from track info
+                if (obj.has("device") && !obj.get("device").isJsonNull()) {
+                    JsonObject device = obj.getAsJsonObject("device");
+                    activeDeviceId = device.get("id").getAsString();
                 }
-                // --- END OF NEW CODE ---
 
                 if (obj.has("item") && !obj.get("item").isJsonNull()) {
                     JsonObject item = obj.getAsJsonObject("item");
@@ -308,4 +230,5 @@ public class SpotifyService {
                 }
             });
         }
-    }}
+    }
+}
