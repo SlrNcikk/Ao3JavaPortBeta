@@ -1,6 +1,5 @@
 package JavaBeta;
 
-
 public class Work {
     private final String title;
     private final String author;
@@ -16,13 +15,14 @@ public class Work {
         this.lastUpdated = lastUpdated;
     }
 
-
     public String getTitle() { return title; }
     public String getAuthor() { return author; }
     public String getUrl() { return url; }
+    public String getTags() { return tags; }
+    public String getLastUpdated() { return lastUpdated; }
 
     @Override
     public String toString() {
-        return title + " by " + author; // Keep this for potential future ListView use
+        return title + " by " + author;
     }
 }
