@@ -256,6 +256,7 @@ public class SpotifyService {
     }
 
     // === SEARCH ===
+    // === SEARCH ===
     public static java.util.Map<String, String> searchAll(String query, int limit) throws IOException {
         java.util.Map<String, String> results = new java.util.LinkedHashMap<>();
         if (accessToken == null) throw new IOException("Not authenticated");
@@ -283,25 +284,37 @@ public class SpotifyService {
 
         if (root.has("tracks")) {
             for (var item : root.getAsJsonObject("tracks").getAsJsonArray("items")) {
-                JsonObject track = item.getAsJsonObject();
-                String name = track.get("name").getAsString();
-                String artist = track.getAsJsonArray("artists").get(0)
-                        .getAsJsonObject().get("name").getAsString();
-                results.put("🎵 " + name + " — " + artist, track.get("uri").getAsString());
+                // FIX: Check if the item is null before using it
+                if (item != null && !item.isJsonNull()) {
+                    JsonObject track = item.getAsJsonObject();
+                    String name = track.get("name").getAsString();
+                    String artist = track.getAsJsonArray("artists").get(0)
+                            .getAsJsonObject().get("name").getAsString();
+                    results.put("🎵 " + name + " — " + artist, track.get("uri").getAsString());
+                }
             }
         }
         if (root.has("albums")) {
             for (var item : root.getAsJsonObject("albums").getAsJsonArray("items")) {
-                JsonObject album = item.getAsJsonObject();
-                results.put("💿 " + album.get("name").getAsString(),
-                        album.get("uri").getAsString());
+                // FIX: Check if the item is null before using it
+                if (item != null && !item.isJsonNull()) {
+                    JsonObject album = item.getAsJsonObject();
+                    //
+                    // ↓↓↓ THIS IS THE LINE I FIXED (from .AsBoolean() to .getAsString()) ↓↓↓
+                    //
+                    results.put("💿 " + album.get("name").getAsString(),
+                            album.get("uri").getAsString());
+                }
             }
         }
         if (root.has("playlists")) {
             for (var item : root.getAsJsonObject("playlists").getAsJsonArray("items")) {
-                JsonObject playlist = item.getAsJsonObject();
-                results.put("📜 " + playlist.get("name").getAsString(),
-                        playlist.get("uri").getAsString());
+                // FIX: This is the one that was crashing
+                if (item != null && !item.isJsonNull()) {
+                    JsonObject playlist = item.getAsJsonObject();
+                    results.put("📜 " + playlist.get("name").getAsString(),
+                            playlist.get("uri").getAsString());
+                }
             }
         }
 
