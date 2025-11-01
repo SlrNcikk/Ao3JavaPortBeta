@@ -6,15 +6,11 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
-import javafx.application.Platform;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -42,7 +38,6 @@ public class SpotifyController {
 
     @FXML
     private void initialize() {
-        // Button actions
         searchButton.setOnAction(e -> onSearch());
         playButton.setOnAction(e -> onPlay());
         pauseButton.setOnAction(e -> onPause());
@@ -51,7 +46,6 @@ public class SpotifyController {
         refreshButton.setOnAction(e -> onRefresh());
         loginButton.setOnAction(e -> onLogin());
 
-        // Double-click search result → play
         searchResultsList.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
                 String selected = searchResultsList.getSelectionModel().getSelectedItem();
@@ -70,12 +64,9 @@ public class SpotifyController {
             }
         });
 
-        // Start refreshing track info automatically
-        refreshTrackInfo();
         startTrackRefresh();
     }
 
-    /** Automatically refresh track info every 10 seconds */
     private void startTrackRefresh() {
         trackRefreshTimeline = new Timeline(
                 new KeyFrame(Duration.seconds(10), event -> refreshTrackInfo())
@@ -84,7 +75,6 @@ public class SpotifyController {
         trackRefreshTimeline.play();
     }
 
-    /** Search Spotify */
     @FXML
     private void onSearch() {
         String query = searchField.getText();
@@ -93,26 +83,20 @@ public class SpotifyController {
         new Thread(() -> {
             try {
                 Map<String, String> results = SpotifyService.searchAll(query, 5);
-                System.out.println("Raw Spotify search results: " + results);
-
                 Platform.runLater(() -> {
                     searchResultsList.getItems().clear();
                     if (results.isEmpty()) {
                         searchResultsList.getItems().add("No results found.");
                         return;
                     }
-
                     results.keySet().forEach(searchResultsList.getItems()::add);
                     lastSearchResults = results;
-
-                    currentTrackLabel.setText("Found " + results.size() + " results for \"" + query + "\"");
-
                     String first = results.keySet().iterator().next();
                     songTitle.setText(first);
                     artistName.setText("Tap a result to play");
                     albumCover.setImage(new Image("https://upload.wikimedia.org/wikipedia/commons/3/3c/Spotify_icon.svg"));
+                    currentTrackLabel.setText("Found " + results.size() + " results for \"" + query + "\"");
                 });
-
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
                 Platform.runLater(() -> currentTrackLabel.setText("Search failed: " + e.getMessage()));
@@ -135,31 +119,26 @@ public class SpotifyController {
 
     @FXML
     private void onLogin() {
-        // 1. Update UI immediately to show work is starting
+        // Disable login button immediately and show progress
         loginButton.setText("Logging in...");
         loginButton.setDisable(true);
 
-        // 2. Start the authentication on a new background thread
+        // Start authentication on a background thread
         new Thread(() -> {
             try {
-                // 3. This is the long, blocking call.
-                // It runs safely in the background.
+                // Perform Spotify authentication
                 SpotifyService.authenticate();
 
-                // 4. --- SUCCESS ---
-                // Authentication is done! Send the UI updates
-                // back to the JavaFX Application Thread.
+                // SUCCESS: update UI on JavaFX thread
                 Platform.runLater(() -> {
                     loginButton.setText("Logged In!");
-                    refreshTrackInfo(); // Now it's safe to refresh
+                    refreshTrackInfo();  // refresh now that authentication is done
                 });
 
             } catch (Exception e) {
-                // 5. --- FAILURE ---
-                // If auth fails, print the error
                 e.printStackTrace();
 
-                // Let the user try again
+                // FAILURE: update UI so user can try again
                 Platform.runLater(() -> {
                     loginButton.setText("Login Failed! Try Again.");
                     loginButton.setDisable(false);
@@ -168,17 +147,17 @@ public class SpotifyController {
         }).start();
     }
 
+
     @FXML private void onPlay() { executePlayerAction(() -> SpotifyService.play()); }
     @FXML private void onPause() { executePlayerAction(() -> SpotifyService.pause()); }
     @FXML private void onNext() { executePlayerAction(() -> SpotifyService.nextTrack()); }
     @FXML private void onPrevious() { executePlayerAction(() -> SpotifyService.previousTrack()); }
 
-    /** Refresh current track info */
     private void refreshTrackInfo() {
         new Thread(() -> {
             try {
-                String json = SpotifyService.getCurrentTrackJson();
-                if (json == null || json.isBlank()) {
+                JsonObject trackJson = SpotifyService.getCurrentTrackJson();
+                if (trackJson == null) {
                     Platform.runLater(() -> {
                         currentTrackLabel.setText("No track playing.");
                         songTitle.setText("-");
@@ -188,8 +167,7 @@ public class SpotifyController {
                     return;
                 }
 
-                JsonObject root = JsonParser.parseString(json).getAsJsonObject();
-                JsonObject item = root.getAsJsonObject("item");
+                JsonObject item = trackJson.getAsJsonObject("item");
                 if (item == null) return;
 
                 String trackName = item.get("name").getAsString();
@@ -202,7 +180,6 @@ public class SpotifyController {
                     albumCover.setImage(new Image(imageUrl, true));
                     currentTrackLabel.setText("Now Playing: " + trackName + " - " + artist);
                 });
-
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
                 Platform.runLater(() -> currentTrackLabel.setText("Unable to fetch track info."));
@@ -210,7 +187,6 @@ public class SpotifyController {
         }).start();
     }
 
-    /** Utility to execute play/pause/next/previous safely */
     private void executePlayerAction(PlayerAction action) {
         new Thread(() -> {
             try {
