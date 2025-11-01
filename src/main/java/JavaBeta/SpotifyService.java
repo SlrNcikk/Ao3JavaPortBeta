@@ -5,20 +5,106 @@ import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 
 public class SpotifyService {
 
+    private static final String CLIENT_ID = "60427f7ee95a4f2894d82fc5658e11a0";
+    private static final String CLIENT_SECRET = "c69f922f3ff143c2aaab7df97621a53b";
+    private static final String REDIRECT_URI = "http://127.0.0.1:8888/callback";
+    private static final String AUTH_URL = "https://accounts.spotify.com/authorize"; // <-- REAL URL
+    private static final String TOKEN_URL = "https://accounts.spotify.com/api/token"; // <-- REAL URL
     private static final String BASE_URL = "https://api.spotify.com";
-    private static String accessToken = null;
-    private static String activeDeviceId = null;
+
+    private static String accessToken;
+    private static String activeDeviceId;
 
     // === AUTHENTICATION ===
     public static void authenticate() throws IOException {
-        // your existing OAuth/login logic here
-        // make sure to set accessToken = "..." after obtaining it
+        try {
+            // === Step 1: Spotify App Credentials ===
+
+            // === Step 2: Create local server to handle the redirect ===
+            com.sun.net.httpserver.HttpServer server =
+                    com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(8888), 0);
+
+            final String[] codeHolder = new String[1];
+
+            server.createContext("/callback", exchange -> {
+                String query = exchange.getRequestURI().getQuery();
+                if (query != null && query.contains("code=")) {
+                    String code = query.substring(query.indexOf("code=") + 5);
+                    if (code.contains("&")) {
+                        code = code.substring(0, code.indexOf("&"));
+                    }
+                    codeHolder[0] = code;
+                    String response = "<html><body><h1>Spotify login successful! You can close this window.</h1></body></html>";
+                    exchange.sendResponseHeaders(200, response.length());
+                    try (java.io.OutputStream os = exchange.getResponseBody()) {
+                        os.write(response.getBytes());
+                    }
+                }
+            });
+
+            server.start();
+
+            // === Step 3: Open the Spotify authorization URL ===
+            String scope = String.join(" ",
+                    "user-read-playback-state",
+                    "user-modify-playback-state",
+                    "user-read-currently-playing",
+                    "user-read-private",
+                    "user-read-email"
+            );
+
+            String authUrl = "https://accounts.spotify.com/authorize"
+                    + "?client_id=" + CLIENT_ID
+                    + "&response_type=code"
+                    + "&redirect_uri=" + java.net.URLEncoder.encode(REDIRECT_URI, "UTF-8")
+                    + "&scope=" + java.net.URLEncoder.encode(scope, "UTF-8");
+
+            java.awt.Desktop.getDesktop().browse(java.net.URI.create(authUrl));
+
+            // === Step 4: Wait for the callback (user login) ===
+            System.out.println("Waiting for Spotify login...");
+            while (codeHolder[0] == null) {
+                Thread.sleep(1000);
+            }
+            server.stop(0);
+
+            // === Step 5: Exchange code for access token ===
+            String tokenUrl = "https://accounts.spotify.com/api/token";
+
+            String body = "grant_type=authorization_code"
+                    + "&code=" + codeHolder[0]
+                    + "&redirect_uri=" + java.net.URLEncoder.encode(REDIRECT_URI, "UTF-8")
+                    + "&client_id=" + CLIENT_ID
+                    + "&client_secret=" + CLIENT_SECRET;
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(tokenUrl))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
+
+            if (json.has("access_token")) {
+                accessToken = json.get("access_token").getAsString();
+                System.out.println("Spotify authenticated successfully.");
+            } else {
+                System.err.println("Failed to get access token: " + response.body());
+            }
+
+        } catch (Exception e) {
+            throw new IOException("Spotify authentication failed: " + e.getMessage(), e);
+        }
     }
 
     // === GENERIC REQUEST HANDLER ===
@@ -109,13 +195,13 @@ public class SpotifyService {
     public static void play() throws IOException {
         ensureActiveDevice();
         String url = BASE_URL + "/v1/me/player/play?device_id=" + activeDeviceId;
-        sendSpotifyRequest("PUT", url, "{}");
+        sendSpotifyRequest("PUT", url, null);
     }
 
     public static void pause() throws IOException {
         ensureActiveDevice();
         String url = BASE_URL + "/v1/me/player/pause?device_id=" + activeDeviceId;
-        sendSpotifyRequest("PUT", url, "{}");
+        sendSpotifyRequest("PUT", url, null);
     }
 
     public static void nextTrack() throws IOException {
@@ -147,8 +233,9 @@ public class SpotifyService {
         java.util.Map<String, String> results = new java.util.LinkedHashMap<>();
         if (accessToken == null) throw new IOException("Not authenticated");
 
-        String url = BASE_URL + "/v1/search?q=" + query.replace(" ", "%20")
-                + "&type=track,album,playlist&limit=" + limit;
+        String url = BASE_URL + "/v1/search?q=" +
+                URLEncoder.encode(query, StandardCharsets.UTF_8) +
+                "&type=track,album,playlist&limit=" + limit;
 
         String json = sendSpotifyRequest("GET", url, null);
         if (json == null || json.isEmpty()) return results;
