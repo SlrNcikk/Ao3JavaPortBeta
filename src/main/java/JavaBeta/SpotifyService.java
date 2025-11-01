@@ -9,6 +9,7 @@ import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.classic.methods.HttpPut;
 import org.apache.hc.client5.http.entity.UrlEncodedFormEntity;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.NameValuePair;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
@@ -24,6 +25,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.net.URLEncoder;
+import java.util.HashMap;
+import java.util.Map;
+
 
 public class SpotifyService {
     private static final String CLIENT_ID = "60427f7ee95a4f2894d82fc5658e11a0";
@@ -132,6 +139,33 @@ public class SpotifyService {
             });
         }
     }
+
+    private static Map<String, String> lastSearchResults = new HashMap<>();
+
+    public static Map<String, String> searchTracks(String query) throws IOException {
+        String response = apiRequest("/v1/search?q=" + URLEncoder.encode(query, "UTF-8") + "&type=track&limit=5");
+        JSONObject json = new JSONObject(response);
+        JSONArray items = json.getJSONObject("tracks").getJSONArray("items");
+
+        lastSearchResults.clear();
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject track = items.getJSONObject(i);
+            String name = track.getString("name");
+            String artist = track.getJSONArray("artists").getJSONObject(0).getString("name");
+            String uri = track.getString("uri");
+            lastSearchResults.put(name + " - " + artist, uri);
+        }
+        return lastSearchResults;
+    }
+
+    public static String getUriForTrack(String name) {
+        return lastSearchResults.get(name);
+    }
+
+    public static void playTrack(String uri) throws IOException {
+        apiRequest("/v1/me/player/play", "PUT", "{\"uris\": [\"" + uri + "\"]}");
+    }
+
 
     // Play a specific track by Spotify URI
     public static void playTrackByUri(String trackUri) throws IOException {
@@ -274,4 +308,40 @@ public class SpotifyService {
             });
         }
     }
+    // Generic Spotify API request helper
+    private static String apiRequest(String endpoint, String method, String body) throws IOException {
+        if (accessToken == null || accessToken.isEmpty()) {
+            throw new IOException("No access token available.");
+        }
+
+        try (CloseableHttpClient client = HttpClients.createDefault()) {
+            String url = "https://api.spotify.com" + endpoint;
+            HttpUriRequestBase request;
+
+            // Select HTTP method
+            if (method.equalsIgnoreCase("POST")) request = new HttpPost(url);
+            else if (method.equalsIgnoreCase("PUT")) request = new HttpPut(url);
+            else request = new HttpGet(url);
+
+            // Headers
+            request.setHeader("Authorization", "Bearer " + accessToken);
+            request.setHeader("Content-Type", "application/json");
+
+            // Request body (for PUT/POST)
+            if (body != null && !body.isEmpty()) {
+                request.setEntity(new StringEntity(body, StandardCharsets.UTF_8));
+            }
+
+            // Execute request and return response text
+            return client.execute(request, response ->
+                    EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8)
+            );
+        }
+    }
+
+    // Overload for GET-only (convenience method)
+    private static String apiRequest(String endpoint) throws IOException {
+        return apiRequest(endpoint, "GET", null);
+    }
+
 }

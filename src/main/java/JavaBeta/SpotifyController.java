@@ -1,44 +1,62 @@
 package JavaBeta;
 
 import javafx.fxml.FXML;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
+import javafx.scene.control.*;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.util.Duration;
-
+import java.io.IOException;
+import java.util.Map;
 
 public class SpotifyController {
 
-    @FXML private javafx.scene.control.TextField searchField;
-    @FXML private javafx.scene.control.Button searchButton;
-    @FXML private javafx.scene.control.Label searchResultLabel;
+    @FXML private TextField searchField;
+    @FXML private Button searchButton;
+    @FXML private ListView<String> searchResultsList;
     @FXML private Button playButton;
     @FXML private Button pauseButton;
     @FXML private Button nextButton;
     @FXML private Button previousButton;
     @FXML private Button loginButton;
     @FXML private Button refreshButton;
-    @FXML private Label currentTrackLabel; // <-- Use this instead of trackLabel
+    @FXML private Label currentTrackLabel; // replaces trackLabel
 
     private Timeline trackRefreshTimeline;
 
     @FXML
     private void initialize() {
-        searchButton.setOnAction(e -> onSearch());
-        refreshTrackInfo(); // Initial fetch
-        startTrackRefresh(); // Start automatic updates every 10 seconds
-
         // Button actions
+        searchButton.setOnAction(e -> onSearch());
         playButton.setOnAction(e -> onPlay());
         pauseButton.setOnAction(e -> onPause());
         nextButton.setOnAction(e -> onNext());
         previousButton.setOnAction(e -> onPrevious());
         refreshButton.setOnAction(e -> onRefresh());
         loginButton.setOnAction(e -> onLogin());
+
+        // Search result click → play
+        searchResultsList.setOnMouseClicked(e -> {
+            String selected = searchResultsList.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                String uri = SpotifyService.getUriForTrack(selected);
+                if (uri != null) {
+                    try {
+                        SpotifyService.playTrack(uri);
+                        currentTrackLabel.setText("Playing: " + selected);
+                    } catch (IOException ex) {
+                        currentTrackLabel.setText("Playback failed.");
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        });
+
+        // Start refreshing track info automatically
+        refreshTrackInfo();
+        startTrackRefresh();
     }
 
-    // Timeline that updates currentTrackLabel every 10 seconds
+    /** 🔁 Automatically refresh track info every 10 seconds */
     private void startTrackRefresh() {
         trackRefreshTimeline = new Timeline(
                 new KeyFrame(Duration.seconds(10), event -> refreshTrackInfo())
@@ -47,32 +65,31 @@ public class SpotifyController {
         trackRefreshTimeline.play();
     }
 
+    /** 🔍 Handles music search */
     @FXML
     private void onSearch() {
-        try {
-            String query = searchField.getText().trim();
-            if (query.isEmpty()) {
-                searchResultLabel.setText("Enter a song or artist to search.");
-                return;
-            }
+        String query = searchField.getText().trim();
+        if (query.isEmpty()) {
+            currentTrackLabel.setText("Enter a song name to search.");
+            return;
+        }
 
-            String trackUri = SpotifyService.searchTrack(query); // Returns track URI
-            if (trackUri != null) {
-                searchResultLabel.setText("Top Result: " + trackUri);
-                SpotifyService.playTrackByUri(trackUri);
-            } else {
-                searchResultLabel.setText("No results found.");
-            }
+        try {
+            Map<String, String> tracks = SpotifyService.searchTracks(query);
+            searchResultsList.getItems().clear();
+            searchResultsList.getItems().addAll(tracks.keySet());
+            currentTrackLabel.setText("Select a track to play.");
         } catch (Exception e) {
-            searchResultLabel.setText("Error: " + e.getMessage());
             e.printStackTrace();
+            currentTrackLabel.setText("Search failed: " + e.getMessage());
         }
     }
 
+    /** 🔁 Refresh device and track info */
     @FXML
     private void onRefresh() {
         try {
-            SpotifyService.findAndSetDeviceId(); // Make sure we have the active device
+            SpotifyService.findAndSetDeviceId();
             refreshTrackInfo();
         } catch (Exception e) {
             e.printStackTrace();
@@ -80,6 +97,7 @@ public class SpotifyController {
         }
     }
 
+    /** 🔑 Log in to Spotify */
     @FXML
     private void onLogin() {
         try {
@@ -93,6 +111,7 @@ public class SpotifyController {
         }
     }
 
+    /** ▶️ Play */
     @FXML
     private void onPlay() {
         try {
@@ -103,6 +122,7 @@ public class SpotifyController {
         }
     }
 
+    /** ⏸ Pause */
     @FXML
     private void onPause() {
         try {
@@ -113,6 +133,7 @@ public class SpotifyController {
         }
     }
 
+    /** ⏭ Next track */
     @FXML
     private void onNext() {
         try {
@@ -123,6 +144,7 @@ public class SpotifyController {
         }
     }
 
+    /** ⏮ Previous track */
     @FXML
     private void onPrevious() {
         try {
@@ -133,13 +155,13 @@ public class SpotifyController {
         }
     }
 
-    // Fetch current track from SpotifyService and update currentTrackLabel
+    /** 🎵 Get current playing track */
     private void refreshTrackInfo() {
         try {
             String trackInfo = SpotifyService.getCurrentTrack();
             currentTrackLabel.setText(trackInfo);
         } catch (Exception e) {
-            currentTrackLabel.setText("Unable to fetch track info");
+            currentTrackLabel.setText("Unable to fetch track info.");
             e.printStackTrace();
         }
     }
