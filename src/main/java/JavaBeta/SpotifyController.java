@@ -34,6 +34,7 @@ public class SpotifyController {
     @FXML private Label currentTrackLabel;
 
     private Timeline trackRefreshTimeline;
+    private String currentAlbumCoverUrl = "";
     private Map<String, String> lastSearchResults = new HashMap<>();
 
     @FXML
@@ -54,10 +55,10 @@ public class SpotifyController {
                     new Thread(() -> {
                         try {
                             SpotifyService.playTrack(uri);
-                            Platform.runLater(() -> currentTrackLabel.setText("Playing: " + selected));
+                            Platform.runLater(() -> songTitle.setText("Playing: " + selected));
                         } catch (IOException | InterruptedException ex) {
                             ex.printStackTrace();
-                            Platform.runLater(() -> currentTrackLabel.setText("Failed to play: " + selected));
+                            Platform.runLater(() -> songTitle.setText("Failed to play: " + selected));
                         }
                     }).start();
                 }
@@ -91,18 +92,14 @@ public class SpotifyController {
                     }
                     results.keySet().forEach(searchResultsList.getItems()::add);
                     lastSearchResults = results;
-                    String first = results.keySet().iterator().next();
-                    songTitle.setText(first);
-                    artistName.setText("Tap a result to play");
-                    albumCover.setImage(new Image("https://upload.wikimedia.org/wikipedia/commons/3/3c/Spotify_icon.svg"));
-                    currentTrackLabel.setText("Found " + results.size() + " results for \"" + query + "\"");
                 });
-            } catch (IOException | InterruptedException e) {
+            } catch (Exception e) {  // catch any exception from searchAll
                 e.printStackTrace();
-                Platform.runLater(() -> currentTrackLabel.setText("Search failed: " + e.getMessage()));
+                Platform.runLater(() -> songTitle.setText("Search failed: " + e.getMessage()));
             }
         }).start();
     }
+
 
     @FXML
     private void onRefresh() {
@@ -112,7 +109,7 @@ public class SpotifyController {
                 refreshTrackInfo();
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
-                Platform.runLater(() -> currentTrackLabel.setText("Failed to refresh."));
+                Platform.runLater(() -> songTitle.setText("Failed to refresh."));
             }
         }).start();
     }
@@ -157,32 +154,47 @@ public class SpotifyController {
         new Thread(() -> {
             try {
                 JsonObject trackJson = SpotifyService.getCurrentTrackJson();
+
                 if (trackJson == null) {
+                    // --- A: NOTHING IS PLAYING ---
                     Platform.runLater(() -> {
-                        songTitle.setText("-");
+                        songTitle.setText("Nothing Playing");
                         artistName.setText("-");
-                        albumCover.setImage(new Image("https://upload.wikimedia.org/wikipedia/commons/3/3c/Spotify_icon.svg"));
+
+                        // Clear the album cover (if it's not already clear)
+                        if (currentAlbumCoverUrl != null) {
+                            currentAlbumCoverUrl = null;
+                            albumCover.setImage(null); // Set to null or a placeholder
+                        }
                     });
-                    return;
+                    return; // Stop the thread
                 }
 
-                JsonObject item = trackJson.getAsJsonObject("item");
-                if (item == null) return;
+                // --- B: SOMETHING IS PLAYING ---
+                // (Your code to get info from trackJson goes here)
+                // Example:
+                String trackName = trackJson.get("item").getAsJsonObject().get("name").getAsString();
+                String artist = trackJson.get("item").getAsJsonObject().get("artists").getAsJsonArray().get(0).getAsJsonObject().get("name").getAsString();
+                String newAlbumCoverUrl = trackJson.get("item").getAsJsonObject().get("album").getAsJsonObject().get("images").getAsJsonArray().get(0).getAsJsonObject().get("url").getAsString();
 
-                String trackName = item.get("name").getAsString();
-                String artist = item.getAsJsonArray("artists").get(0).getAsJsonObject().get("name").getAsString();
-                String imageUrl = item.getAsJsonObject("album").getAsJsonArray("images").get(0).getAsJsonObject().get("url").getAsString();
-
+                // Now update the UI
                 Platform.runLater(() -> {
                     songTitle.setText(trackName);
                     artistName.setText(artist);
-                    albumCover.setImage(new Image(imageUrl, true));
+
+                    // --- THIS IS THE CORRECT PLACE FOR THE FIX ---
+                    // Only update the image if the URL is new
+                    if (!newAlbumCoverUrl.equals(currentAlbumCoverUrl)) {
+                        currentAlbumCoverUrl = newAlbumCoverUrl; // 1. Save the new URL
+                        albumCover.setImage(new Image(currentAlbumCoverUrl)); // 2. Set the image
+                    }
+                    // --- END OF FIX ---
                 });
-            } catch (IOException | InterruptedException e) {
+
+            } catch (Exception e) {
                 e.printStackTrace();
-                Platform.runLater(() -> currentTrackLabel.setText("Unable to fetch track info."));
             }
-        }).start();
+        }).start(); // Don't forget to start the thread!
     }
 
     private void executePlayerAction(PlayerAction action) {
@@ -192,7 +204,7 @@ public class SpotifyController {
                 refreshTrackInfo();
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
-                Platform.runLater(() -> currentTrackLabel.setText("Error: " + e.getMessage()));
+                Platform.runLater(() -> songTitle.setText("Error: " + e.getMessage()));
             }
         }).start();
     }

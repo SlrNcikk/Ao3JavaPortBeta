@@ -1,8 +1,6 @@
 package JavaBeta;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import com.sun.net.httpserver.HttpServer;
 
 import java.awt.Desktop;
@@ -218,58 +216,79 @@ public class SpotifyService {
     }
 
     // ----------------- Search -----------------
-    public static Map<String, String> searchAll(String query, int limit) throws IOException, InterruptedException {
-        String encodedQuery = java.net.URLEncoder.encode(query, StandardCharsets.UTF_8);
-        String url = BASE_URL + "/v1/search?q=" + encodedQuery + "&type=track,album,playlist&limit=" + limit;
-        HttpRequest request = authRequest(url).GET().build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        // We create the 'results' map here, so we can return it early if there's an error
+    public static Map<String, String> searchAll(String query, int limit) {
         Map<String, String> results = new LinkedHashMap<>();
+        try {
+            String url = BASE_URL + "/v1/search?q=" + java.net.URLEncoder.encode(query, StandardCharsets.UTF_8)
+                    + "&type=track,album,playlist&limit=" + limit;
+            HttpRequest request = authRequest(url).GET().build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonElement element = JsonParser.parseString(response.body());
+            if (element == null || !element.isJsonObject()) return results;
+            JsonObject root = element.getAsJsonObject();
 
-        // ---- NEW CHECKS ----
-        // 1. Check if the request failed (e.g., 401 Unauthorized, 404 Not Found)
-        if (response.statusCode() != 200) {
-            System.err.println("Spotify search error: " + response.body());
-            return results; // Return the empty map
-        }
-
-        // 2. Check if the response body is null or just empty
-        String responseBody = response.body();
-        if (responseBody == null || responseBody.isEmpty()) {
-            System.err.println("Spotify returned an empty search response.");
-            return results; // Return the empty map
-        }
-        // ---- END OF CHECKS ----
-
-        // Now it's safe to parse the JSON
-        JsonObject root = JsonParser.parseString(responseBody).getAsJsonObject();
-
-        // These are your original three blocks to get the data
-        if (root.has("tracks")) {
-            JsonArray items = root.getAsJsonObject("tracks").getAsJsonArray("items");
-            for (var item : items) {
-                JsonObject track = item.getAsJsonObject();
-                results.put(track.get("name").getAsString(), track.get("uri").getAsString());
+            // --- Parse tracks ---
+            if (root.has("tracks") && !root.get("tracks").isJsonNull() && root.get("tracks").isJsonObject()) {
+                JsonObject tracksObj = root.getAsJsonObject("tracks");
+                if (tracksObj.has("items") && tracksObj.get("items").isJsonArray()) {
+                    JsonArray items = tracksObj.getAsJsonArray("items");
+                    for (JsonElement item : items) {
+                        if (item.isJsonObject()) {
+                            JsonObject track = item.getAsJsonObject();
+                            String name = track.has("name") ? track.get("name").getAsString() : "Unknown Track";
+                            String uri = track.has("uri") ? track.get("uri").getAsString() : "";
+                            results.put(name, uri);
+                        }
+                    }
+                }
             }
-        }
-        if (root.has("albums")) {
-            JsonArray items = root.getAsJsonObject("albums").getAsJsonArray("items");
-            for (var item : items) {
-                JsonObject album = item.getAsJsonObject();
-                results.put(album.get("name").getAsString(), album.get("uri").getAsString());
+
+            // --- Parse albums ---
+            if (root.has("albums") && !root.get("albums").isJsonNull() && root.get("albums").isJsonObject()) {
+                JsonObject albumsObj = root.getAsJsonObject("albums");
+                if (albumsObj.has("items") && albumsObj.get("items").isJsonArray()) {
+                    JsonArray items = albumsObj.getAsJsonArray("items");
+                    for (JsonElement item : items) {
+                        if (item.isJsonObject()) {
+                            JsonObject album = item.getAsJsonObject();
+                            String name = album.has("name") ? album.get("name").getAsString() : "Unknown Album";
+                            String uri = album.has("uri") ? album.get("uri").getAsString() : "";
+                            results.put(name, uri);
+                        }
+                    }
+                }
             }
-        }
-        if (root.has("playlists")) {
-            JsonArray items = root.getAsJsonObject("playlists").getAsJsonArray("items");
-            for (var item : items) {
-                JsonObject playlist = item.getAsJsonObject();
-                results.put(playlist.get("name").getAsString(), playlist.get("uri").getAsString());
+
+            // --- Parse playlists ---
+            if (root.has("playlists") && !root.get("playlists").isJsonNull() && root.get("playlists").isJsonObject()) {
+                JsonObject playlistsObj = root.getAsJsonObject("playlists");
+                if (playlistsObj.has("items") && playlistsObj.get("items").isJsonArray()) {
+                    JsonArray items = playlistsObj.getAsJsonArray("items");
+                    for (JsonElement item : items) {
+                        if (item.isJsonObject()) {
+                            JsonObject playlist = item.getAsJsonObject();
+                            String name = playlist.has("name") ? playlist.get("name").getAsString() : "Unknown Playlist";
+                            String uri = playlist.has("uri") ? playlist.get("uri").getAsString() : "";
+                            results.put(name, uri);
+                        }
+                    }
+                }
             }
+        } catch (IOException e) {
+            System.err.println("IO error searching Spotify: " + e.getMessage());
+        } catch (InterruptedException e) {
+            System.err.println("Request interrupted: " + e.getMessage());
+            Thread.currentThread().interrupt();
+        } catch (JsonSyntaxException e) {
+            System.err.println("Invalid JSON from Spotify API: " + e.getMessage());
+        } catch (Exception e) {
+            System.err.println("Error searching Spotify: " + e.getMessage());
         }
 
         return results;
     }
+
+
 
     // ----------------- Current Track -----------------
     public static JsonObject getCurrentTrackJson() throws IOException, InterruptedException {
