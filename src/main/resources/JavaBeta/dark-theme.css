@@ -1,0 +1,23 @@
+/* src/main/resources/JavaBeta/dark-theme.css */
+
+.root {
+    -fx-base: #333333; /* Dark base color */
+    -fx-background: #2B2B2B;
+    -fx-control-inner-background: #444444; /* Inside of text fields, lists */
+    -fx-text-fill: white;
+}
+
+/* Fix text colors for controls */
+.label, .button, .toggle-button {
+    -fx-text-fill: white;
+}
+
+/* Fix text color in list cells */
+.list-cell {
+    -fx-text-fill: white;
+}
+
+/* Fix prompt text color in text fields */
+.text-field {
+    -fx-prompt-text-fill: #A9A9A9;
+}

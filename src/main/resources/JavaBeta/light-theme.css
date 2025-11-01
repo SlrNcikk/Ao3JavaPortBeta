@@ -1,0 +1,12 @@
+/* src/main/resources/JavaBeta/light-theme.css */
+
+.root {
+    -fx-base: #F4F4F4; /* A light grey base */
+    -fx-background: white;
+    -fx-control-inner-background: white; /* Inside of text fields, lists */
+    -fx-text-fill: black;
+}
+
+.list-cell {
+    -fx-text-fill: black;
+}

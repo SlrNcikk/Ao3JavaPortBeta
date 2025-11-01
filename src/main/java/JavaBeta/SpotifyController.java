@@ -5,12 +5,15 @@ import com.google.gson.JsonParser;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
+import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.layout.VBox;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -36,6 +39,13 @@ public class SpotifyController {
     private Timeline trackRefreshTimeline;
     private String currentAlbumCoverUrl = "";
     private Map<String, String> lastSearchResults = new HashMap<>();
+
+    @FXML
+    private VBox rootVBox;
+
+
+    @FXML
+    private ToggleButton themeToggleButton;
 
     @FXML
     private void initialize() {
@@ -113,6 +123,25 @@ public class SpotifyController {
             }
         }).start();
     }
+    @FXML
+    void onToggleTheme(ActionEvent event) {
+        // Get the scene to apply the stylesheet to
+        var scene = rootVBox.getScene();
+
+        // Always clear old stylesheets
+        scene.getStylesheets().clear();
+
+        if (themeToggleButton.isSelected()) {
+            // --- DARK MODE ---
+            scene.getStylesheets().add(getClass().getResource("dark-theme.css").toExternalForm());
+            themeToggleButton.setText("Light Mode");
+        } else {
+            // --- LIGHT MODE ---
+            scene.getStylesheets().add(getClass().getResource("light-theme.css").toExternalForm());
+            themeToggleButton.setText("Dark Mode");
+        }
+    }
+
 
     @FXML
     private void onLogin() {
