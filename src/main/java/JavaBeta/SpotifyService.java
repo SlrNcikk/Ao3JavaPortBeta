@@ -1,5 +1,6 @@
 package JavaBeta;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -16,8 +17,8 @@ public class SpotifyService {
     private static final String CLIENT_ID = "60427f7ee95a4f2894d82fc5658e11a0";
     private static final String CLIENT_SECRET = "c69f922f3ff143c2aaab7df97621a53b";
     private static final String REDIRECT_URI = "http://127.0.0.1:8888/callback";
-    private static final String AUTH_URL = "https://accounts.spotify.com/authorize"; // <-- REAL URL
-    private static final String TOKEN_URL = "https://accounts.spotify.com/api/token"; // <-- REAL URL
+    private static final String AUTH_URL = "https://accounts.spotify.com/authorize";
+    private static final String TOKEN_URL = "https://accounts.spotify.com/api/token";
     private static final String BASE_URL = "https://api.spotify.com";
 
     private static String accessToken;
@@ -61,7 +62,7 @@ public class SpotifyService {
                     "user-read-email"
             );
 
-            String authUrl = "https://accounts.spotify.com/authorize"
+            String authUrl = AUTH_URL
                     + "?client_id=" + CLIENT_ID
                     + "&response_type=code"
                     + "&redirect_uri=" + java.net.URLEncoder.encode(REDIRECT_URI, "UTF-8")
@@ -77,7 +78,7 @@ public class SpotifyService {
             server.stop(0);
 
             // === Step 5: Exchange code for access token ===
-            String tokenUrl = "https://accounts.spotify.com/api/token";
+            String tokenUrl = TOKEN_URL;
 
             String body = "grant_type=authorization_code"
                     + "&code=" + codeHolder[0]
@@ -117,20 +118,35 @@ public class SpotifyService {
                     .header("Content-Type", "application/json");
 
             switch (method.toUpperCase()) {
-                case "POST":
-                    builder.POST(HttpRequest.BodyPublishers.ofString(jsonBody == null ? "" : jsonBody));
-                    break;
-                case "PUT":
-                    builder.PUT(HttpRequest.BodyPublishers.ofString(jsonBody == null ? "" : jsonBody));
-                    break;
-                default:
-                    builder.GET();
-                    break;
+                case "POST" -> builder.POST(HttpRequest.BodyPublishers.ofString(jsonBody == null ? "" : jsonBody));
+                case "PUT" -> builder.PUT(HttpRequest.BodyPublishers.ofString(jsonBody == null ? "" : jsonBody));
+                default -> builder.GET();
             }
 
             HttpRequest request = builder.build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            return response.body();
+
+            int status = response.statusCode();
+            String body = response.body();
+
+            // Handle common API errors
+            if (status == 401) {
+                System.err.println("Spotify API: Unauthorized (401) - token may be expired.");
+                return null;
+            } else if (status == 429) {
+                System.err.println("Spotify API: Rate limit exceeded (429). Try again later.");
+                return null;
+            } else if (status >= 400) {
+                System.err.println("Spotify API returned error " + status + ": " + body);
+                return null;
+            }
+
+            if (body == null || body.isBlank()) {
+                System.err.println("Spotify API returned empty response for " + url);
+                return null;
+            }
+
+            return body;
         } catch (Exception e) {
             throw new IOException("HTTP request failed: " + e.getMessage(), e);
         }
@@ -238,9 +254,21 @@ public class SpotifyService {
                 "&type=track,album,playlist&limit=" + limit;
 
         String json = sendSpotifyRequest("GET", url, null);
-        if (json == null || json.isEmpty()) return results;
 
-        JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+        System.out.println("Raw Spotify response: " + json);
+
+        if (json == null || json.isEmpty()) {
+            System.err.println("Spotify search returned empty or invalid response for query: " + query);
+            return results;
+        }
+
+        JsonElement element = JsonParser.parseString(json);
+        if (!element.isJsonObject()) {
+            System.err.println("Spotify search did not return a JSON object: " + json);
+            return results;
+        }
+        JsonObject root = element.getAsJsonObject();
+
 
         if (root.has("tracks")) {
             for (var item : root.getAsJsonObject("tracks").getAsJsonArray("items")) {
