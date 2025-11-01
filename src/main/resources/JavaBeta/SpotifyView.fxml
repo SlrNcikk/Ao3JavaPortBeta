@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
-<?import javafx.scene.image.ImageView?> <?import javafx.scene.layout.*?>
+<?import javafx.scene.layout.*?>
 
 <VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="JavaBeta.SpotifyController"
       alignment="CENTER" spacing="15" style="-fx-padding: 20;">
@@ -14,16 +14,12 @@
 
     <Button fx:id="refreshButton" text="Refresh" onAction="#onRefresh" />
 
-    <VBox fx:id="resultsBox" alignment="CENTER" spacing="5" style="-fx-padding: 10;">
-        <ImageView fx:id="albumCover" fitHeight="150" fitWidth="150" preserveRatio="true" />
-        <Label fx:id="songTitle" text="---" style="-fx-font-weight: bold; -fx-font-size: 16;" />
-        <Label fx:id="artistName" text="---" style="-fx-font-size: 14;" />
-    </VBox>
     <TextField fx:id="searchField" promptText="Search for a song..." />
     <Button fx:id="searchButton" text="Search" />
     <ListView fx:id="searchResultsList" prefHeight="150" />
 
     <HBox alignment="CENTER" spacing="10">
+
     </HBox>
 
     <HBox alignment="CENTER" spacing="10">
