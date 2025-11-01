@@ -11,11 +11,12 @@
 
     <Button fx:id="loginButton" text="Login to Spotify" onAction="#onLogin" maxWidth="Infinity"/>
 
-    <Label text="🎵 Spotify Controller" style="-fx-font-size: 18; -fx-font-weight: bold;" />
+    <Label text="Spotify Controller" style="-fx-font-size: 18; -fx-font-weight: bold;" />
 
     <ImageView fx:id="albumCover" fitHeight="150" fitWidth="150" preserveRatio="true" />
 
     <Label fx:id="songTitle" text="Nothing playing..." style="-fx-font-size: 14;" />
+
     <Label fx:id="artistName" text="Artist" />
 
     <Button fx:id="refreshButton" text="Refresh" onAction="#onRefresh" maxWidth="Infinity"/>
