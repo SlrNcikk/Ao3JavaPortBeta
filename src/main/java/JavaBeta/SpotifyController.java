@@ -4,11 +4,15 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 import java.io.IOException;
@@ -18,6 +22,7 @@ import java.util.Map;
 public class SpotifyController {
 
     @FXML private TextField searchField;
+
     @FXML private Button searchButton;
     @FXML private ListView<String> searchResultsList;
     @FXML private Button playButton;
@@ -26,6 +31,10 @@ public class SpotifyController {
     @FXML private Button previousButton;
     @FXML private Button loginButton;
     @FXML private Button refreshButton;
+    @FXML private Label songTitle;
+    @FXML private Label artistName;
+    @FXML private ImageView albumCover;
+    @FXML private VBox resultsBox;
     @FXML private Label currentTrackLabel; // replaces trackLabel
 
     private Timeline trackRefreshTimeline;
@@ -42,15 +51,14 @@ public class SpotifyController {
         refreshButton.setOnAction(e -> onRefresh());
         loginButton.setOnAction(e -> onLogin());
 
-        // Search result click → play
+        // Double-click search result → play/view
         searchResultsList.setOnMouseClicked(e -> {
-            if (e.getClickCount() == 2) { // double-click to play/view
+            if (e.getClickCount() == 2) {
                 String selected = searchResultsList.getSelectionModel().getSelectedItem();
                 if (selected != null && lastSearchResults.containsKey(selected)) {
                     String uri = lastSearchResults.get(selected);
                     try {
                         if (uri.startsWith("spotify:album:") || uri.startsWith("spotify:playlist:")) {
-                            // For now, just show the type (later we’ll make a view window)
                             currentTrackLabel.setText("Viewing " + selected);
                         } else {
                             SpotifyService.playTrack(uri);
@@ -64,12 +72,9 @@ public class SpotifyController {
             }
         });
 
-
         // Start refreshing track info automatically
         refreshTrackInfo();
         startTrackRefresh();
-
-
     }
 
     /** 🔁 Automatically refresh track info every 10 seconds */
@@ -81,34 +86,42 @@ public class SpotifyController {
         trackRefreshTimeline.play();
     }
 
-
     /** 🔍 Handles music search */
     @FXML
     private void onSearch() {
         String query = searchField.getText();
         if (query == null || query.isBlank()) return;
 
-        try {
-            // Use the new unified search: tracks + albums + playlists
-            Map<String, String> results = SpotifyService.searchAll(query, 5);
+        new Thread(() -> {
+            try {
+                Map<String, String> results = SpotifyService.searchAll(query, 5);
+                System.out.println("Raw Spotify search results: " + results);
 
-            searchResultsList.getItems().clear();
+                Platform.runLater(() -> {
+                    searchResultsList.getItems().clear();
+                    if (results.isEmpty()) {
+                        searchResultsList.getItems().add("No results found.");
+                        return;
+                    }
 
-            if (results.isEmpty()) {
-                searchResultsList.getItems().add("No results found.");
-                return;
+                    for (String name : results.keySet()) {
+                        searchResultsList.getItems().add(name);
+                    }
+
+                    lastSearchResults = results;
+                    currentTrackLabel.setText("Found " + results.size() + " results for \"" + query + "\"");
+
+                    String first = results.keySet().iterator().next();
+                    songTitle.setText(first);
+                    artistName.setText("Tap a result to play");
+                    albumCover.setImage(new Image("https://upload.wikimedia.org/wikipedia/commons/3/3c/Spotify_icon.svg"));
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                Platform.runLater(() -> currentTrackLabel.setText("Search failed: " + e.getMessage()));
             }
-
-            for (String name : results.keySet()) {
-                searchResultsList.getItems().add(name);
-            }
-
-            lastSearchResults = results;
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            currentTrackLabel.setText("Search failed: " + e.getMessage());
-        }
+        }).start();
     }
 
     /** 🔁 Refresh device and track info */
@@ -122,7 +135,6 @@ public class SpotifyController {
             currentTrackLabel.setText("Failed to refresh.");
         }
     }
-
 
     /** 🔑 Log in to Spotify */
     @FXML
@@ -182,14 +194,42 @@ public class SpotifyController {
         }
     }
 
+
+
     /** 🎵 Get current playing track */
     private void refreshTrackInfo() {
-        try {
-            String trackInfo = SpotifyService.getCurrentTrack();
-            currentTrackLabel.setText(trackInfo);
-        } catch (Exception e) {
-            currentTrackLabel.setText("Unable to fetch track info.");
-            e.printStackTrace();
-        }
+        new Thread(() -> {
+            try {
+                String json = SpotifyService.getCurrentTrackJson();
+                if (json == null || json.isBlank()) {
+                    Platform.runLater(() -> currentTrackLabel.setText("No track playing."));
+                    return;
+                }
+
+                JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+                JsonObject item = root.getAsJsonObject("item");
+                if (item == null) return;
+
+                String trackName = item.get("name").getAsString();
+                String artist = item.getAsJsonArray("artists")
+                        .get(0).getAsJsonObject()
+                        .get("name").getAsString();
+                String imageUrl = item.getAsJsonObject("album")
+                        .getAsJsonArray("images")
+                        .get(0).getAsJsonObject()
+                        .get("url").getAsString();
+
+                Platform.runLater(() -> {
+                    songTitle.setText(trackName);
+                    artistName.setText(artist);
+                    albumCover.setImage(new Image(imageUrl, true));
+                    currentTrackLabel.setText("Now Playing: " + trackName + " - " + artist);
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                Platform.runLater(() -> currentTrackLabel.setText("Unable to fetch track info."));
+            }
+        }).start();
     }
 }

@@ -21,7 +21,8 @@ public class SpotifyService {
     private static final String TOKEN_URL = "https://accounts.spotify.com/api/token";
     private static final String BASE_URL = "https://api.spotify.com";
 
-    private static String accessToken;
+
+    private static String accessToken = null;
     private static String activeDeviceId;
 
     // === AUTHENTICATION ===
@@ -150,6 +151,16 @@ public class SpotifyService {
         } catch (Exception e) {
             throw new IOException("HTTP request failed: " + e.getMessage(), e);
         }
+    }
+
+    public static String getCurrentTrackJson() throws IOException {
+        if (accessToken == null) {
+            throw new IOException("Not authenticated. Call authenticate() first.");
+        }
+        String url = BASE_URL + "/v1/me/player/currently-playing";
+        // Use the helper method already defined in this class
+        String response = sendSpotifyRequest("GET", url, null);
+        return response; // raw JSON string
     }
 
     // === FIND DEVICE ===
