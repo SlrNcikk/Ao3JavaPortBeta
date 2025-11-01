@@ -3,33 +3,31 @@ package JavaBeta;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-import org.apache.hc.client5.http.classic.methods.HttpGet;
-import org.apache.hc.client5.http.classic.methods.HttpPost;
-import org.apache.hc.client5.http.classic.methods.HttpPut;
+import org.apache.hc.client5.http.classic.methods.*;
 import org.apache.hc.client5.http.entity.UrlEncodedFormEntity;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
-import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.NameValuePair;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.apache.hc.core5.http.message.BasicNameValuePair;
 import org.apache.hc.core5.http.io.entity.StringEntity;
-import com.sun.net.httpserver.HttpHandler;
+import org.apache.hc.core5.http.message.BasicNameValuePair;
+import org.apache.hc.core5.http.ParseException;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.awt.*;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import java.net.URLEncoder;
-import java.util.HashMap;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.List;
 
 
 public class SpotifyService {
@@ -309,39 +307,55 @@ public class SpotifyService {
         }
     }
     // Generic Spotify API request helper
-    private static String apiRequest(String endpoint, String method, String body) throws IOException {
-        if (accessToken == null || accessToken.isEmpty()) {
-            throw new IOException("No access token available.");
-        }
 
-        try (CloseableHttpClient client = HttpClients.createDefault()) {
-            String url = "https://api.spotify.com" + endpoint;
-            HttpUriRequestBase request;
+    private static final String BASE_URL = "https://api.spotify.com";
 
-            // Select HTTP method
-            if (method.equalsIgnoreCase("POST")) request = new HttpPost(url);
-            else if (method.equalsIgnoreCase("PUT")) request = new HttpPut(url);
-            else request = new HttpGet(url);
-
-            // Headers
-            request.setHeader("Authorization", "Bearer " + accessToken);
-            request.setHeader("Content-Type", "application/json");
-
-            // Request body (for PUT/POST)
-            if (body != null && !body.isEmpty()) {
-                request.setEntity(new StringEntity(body, StandardCharsets.UTF_8));
-            }
-
-            // Execute request and return response text
-            return client.execute(request, response ->
-                    EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8)
-            );
-        }
-    }
-
-    // Overload for GET-only (convenience method)
     private static String apiRequest(String endpoint) throws IOException {
         return apiRequest(endpoint, "GET", null);
     }
 
+    private static String apiRequest(String endpoint, String method, String jsonBody) throws IOException {
+        String url = BASE_URL + endpoint;
+
+        try (CloseableHttpClient client = HttpClients.createDefault()) {
+            HttpUriRequestBase request;
+
+            switch (method.toUpperCase()) {
+                case "POST":
+                    request = new HttpPost(url);
+                    break;
+                case "PUT":
+                    request = new HttpPut(url);
+                    break;
+                case "DELETE":
+                    request = new HttpDelete(url);
+                    break;
+                default:
+                    request = new HttpGet(url);
+                    break;
+            }
+
+            // ✅ HttpUriRequestBase supports setEntity() directly
+            if (jsonBody != null && (request instanceof HttpPut || request instanceof HttpPost)) {
+                ((HttpUriRequestBase) request).setEntity(new StringEntity(jsonBody, ContentType.APPLICATION_JSON));
+            }
+
+            request.setHeader("Authorization", "Bearer " + accessToken);
+            request.setHeader("Content-Type", "application/json");
+
+            try (CloseableHttpResponse response = client.execute(request)) {
+                if (response.getEntity() != null) {
+                    try {
+                        // This is the line that was causing the error
+                        return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+                    } catch (ParseException e) {
+                        // Convert the ParseException into an IOException, which the method already throws
+                        throw new IOException("Failed to parse API response", e);
+                    }
+                } else {
+                    return ""; // no body (204, etc.)
+                }
+            }
+        }
+    }
 }

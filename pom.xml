@@ -17,6 +17,7 @@
 
     <dependencies>
 
+        <!-- JSON libraries -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
@@ -29,13 +30,27 @@
             <version>20231013</version>
         </dependency>
 
+        <!-- Apache HTTP Client 5 -->
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
-            <version>5.3</version>
+            <version>5.3.1</version>
         </dependency>
 
-        <!-- JavaFX dependencies -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.core5</groupId>
+            <artifactId>httpcore5</artifactId>
+            <version>5.3.1</version>
+        </dependency>
+
+        <!-- Jsoup -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
+        </dependency>
+
+        <!-- JavaFX -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
@@ -52,14 +67,7 @@
             <version>${javafx.version}</version>
         </dependency>
 
-        <!-- Jsoup -->
-        <dependency>
-            <groupId>org.jsoup</groupId>
-            <artifactId>jsoup</artifactId>
-            <version>1.17.2</version>
-        </dependency>
-
-        <!-- Ikonli icon packs -->
+        <!-- Ikonli icons -->
         <dependency>
             <groupId>org.kordamp.ikonli</groupId>
             <artifactId>ikonli-javafx</artifactId>
@@ -85,7 +93,9 @@
             <artifactId>ikonli-entypo-pack</artifactId>
             <version>${ikonli.version}</version>
         </dependency>
+
     </dependencies>
+
 
     <build>
         <plugins>
