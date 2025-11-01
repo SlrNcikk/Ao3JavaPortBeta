@@ -1,10 +1,16 @@
 package JavaBeta;
 
-import javafx.fxml.FXML;
-import javafx.scene.control.*;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.fxml.FXML;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TextField;
 import javafx.util.Duration;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -62,6 +68,8 @@ public class SpotifyController {
         // Start refreshing track info automatically
         refreshTrackInfo();
         startTrackRefresh();
+
+
     }
 
     /** 🔁 Automatically refresh track info every 10 seconds */
@@ -72,6 +80,7 @@ public class SpotifyController {
         trackRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
         trackRefreshTimeline.play();
     }
+
 
     /** 🔍 Handles music search */
     @FXML
@@ -113,6 +122,7 @@ public class SpotifyController {
             currentTrackLabel.setText("Failed to refresh.");
         }
     }
+
 
     /** 🔑 Log in to Spotify */
     @FXML
