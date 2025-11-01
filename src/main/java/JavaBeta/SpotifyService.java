@@ -106,6 +106,49 @@ public class SpotifyService {
         }
     }
 
+    public static String searchTrack(String query) throws IOException {
+        if (accessToken == null) return null;
+
+        String encodedQuery = java.net.URLEncoder.encode(query, StandardCharsets.UTF_8);
+        String url = "https://api.spotify.com/v1/search?q=" + encodedQuery + "&type=track&limit=1";
+
+        try (CloseableHttpClient client = HttpClients.createDefault()) {
+            HttpGet get = new HttpGet(url);
+            get.setHeader("Authorization", "Bearer " + accessToken);
+
+            return client.execute(get, response -> {
+                if (response.getCode() != 200) return null;
+
+                String json = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+                JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+                if (obj.has("tracks") && obj.getAsJsonObject("tracks").getAsJsonArray("items").size() > 0) {
+                    JsonObject track = obj.getAsJsonObject("tracks")
+                            .getAsJsonArray("items")
+                            .get(0).getAsJsonObject();
+                    return track.get("uri").getAsString(); // Spotify track URI
+                } else {
+                    return null;
+                }
+            });
+        }
+    }
+
+    // Play a specific track by Spotify URI
+    public static void playTrackByUri(String trackUri) throws IOException {
+        ensureActiveDevice();
+        String url = "https://api.spotify.com/v1/me/player/play?device_id=" + activeDeviceId;
+        String jsonBody = "{ \"uris\": [\"" + trackUri + "\"] }";
+
+        try (CloseableHttpClient client = HttpClients.createDefault()) {
+            HttpPut put = new HttpPut(url);
+            put.setHeader("Authorization", "Bearer " + accessToken);
+            put.setHeader("Content-Type", "application/json");
+            put.setEntity(new StringEntity(jsonBody, StandardCharsets.UTF_8));
+
+            client.execute(put, response -> null);
+        }
+    }
+
     public static void setAccessToken(String token) {
         accessToken = token;
     }

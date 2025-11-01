@@ -10,6 +10,9 @@ import javafx.util.Duration;
 
 public class SpotifyController {
 
+    @FXML private javafx.scene.control.TextField searchField;
+    @FXML private javafx.scene.control.Button searchButton;
+    @FXML private javafx.scene.control.Label searchResultLabel;
     @FXML private Button playButton;
     @FXML private Button pauseButton;
     @FXML private Button nextButton;
@@ -22,6 +25,7 @@ public class SpotifyController {
 
     @FXML
     private void initialize() {
+        searchButton.setOnAction(e -> onSearch());
         refreshTrackInfo(); // Initial fetch
         startTrackRefresh(); // Start automatic updates every 10 seconds
 
@@ -41,6 +45,28 @@ public class SpotifyController {
         );
         trackRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
         trackRefreshTimeline.play();
+    }
+
+    @FXML
+    private void onSearch() {
+        try {
+            String query = searchField.getText().trim();
+            if (query.isEmpty()) {
+                searchResultLabel.setText("Enter a song or artist to search.");
+                return;
+            }
+
+            String trackUri = SpotifyService.searchTrack(query); // Returns track URI
+            if (trackUri != null) {
+                searchResultLabel.setText("Top Result: " + trackUri);
+                SpotifyService.playTrackByUri(trackUri);
+            } else {
+                searchResultLabel.setText("No results found.");
+            }
+        } catch (Exception e) {
+            searchResultLabel.setText("Error: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     @FXML
