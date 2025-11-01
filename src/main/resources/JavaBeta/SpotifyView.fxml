@@ -3,6 +3,8 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
+<?import javafx.scene.image.ImageView?>
+
 <VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="JavaBeta.SpotifyController"
       alignment="CENTER" spacing="15" style="-fx-padding: 20;">
 
@@ -10,7 +12,10 @@
 
     <Button fx:id="loginButton" text="Login to Spotify" onAction="#onLogin" />
 
-    <Label fx:id="currentTrackLabel" text="Nothing playing..." style="-fx-font-size: 14;" />
+    <ImageView fx:id="albumCover" fitHeight="150" fitWidth="150" preserveRatio="true" />
+
+    <Label fx:id="songTitle" text="Nothing playing..." style="-fx-font-size: 14;" />
+    <Label fx:id="artistName" text="Artist" />
 
     <Button fx:id="refreshButton" text="Refresh" onAction="#onRefresh" />
 

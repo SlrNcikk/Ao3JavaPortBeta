@@ -44,8 +44,12 @@ public class SpotifyService {
         CompletableFuture<String> codeFuture = new CompletableFuture<>();
 
         // Dynamic port allocation
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        int port = server.getAddress().getPort();  // save actual port
+        int port = 8888; // hardcoded to match Spotify dashboard
+        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+
+        String redirectUri = "http://127.0.0.1:8888/callback"; // keep this one
+
+
 
         server.createContext("/callback", exchange -> {
             String query = exchange.getRequestURI().getQuery();
@@ -75,8 +79,7 @@ public class SpotifyService {
 
         server.setExecutor(null);
         server.start();
-
-        String redirectUri = "http://127.0.0.1:" + port + "/callback";
+        redirectUri = "http://127.0.0.1:8888/callback";
         String scopes = "user-read-playback-state user-modify-playback-state";
         String authUrl = AUTH_URL + "?" +
                 "client_id=" + CLIENT_ID +
@@ -220,9 +223,29 @@ public class SpotifyService {
         String url = BASE_URL + "/v1/search?q=" + encodedQuery + "&type=track,album,playlist&limit=" + limit;
         HttpRequest request = authRequest(url).GET().build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
+
+        // We create the 'results' map here, so we can return it early if there's an error
         Map<String, String> results = new LinkedHashMap<>();
 
+        // ---- NEW CHECKS ----
+        // 1. Check if the request failed (e.g., 401 Unauthorized, 404 Not Found)
+        if (response.statusCode() != 200) {
+            System.err.println("Spotify search error: " + response.body());
+            return results; // Return the empty map
+        }
+
+        // 2. Check if the response body is null or just empty
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.isEmpty()) {
+            System.err.println("Spotify returned an empty search response.");
+            return results; // Return the empty map
+        }
+        // ---- END OF CHECKS ----
+
+        // Now it's safe to parse the JSON
+        JsonObject root = JsonParser.parseString(responseBody).getAsJsonObject();
+
+        // These are your original three blocks to get the data
         if (root.has("tracks")) {
             JsonArray items = root.getAsJsonObject("tracks").getAsJsonArray("items");
             for (var item : items) {
@@ -244,6 +267,7 @@ public class SpotifyService {
                 results.put(playlist.get("name").getAsString(), playlist.get("uri").getAsString());
             }
         }
+
         return results;
     }
 

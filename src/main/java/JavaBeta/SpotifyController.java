@@ -159,7 +159,6 @@ public class SpotifyController {
                 JsonObject trackJson = SpotifyService.getCurrentTrackJson();
                 if (trackJson == null) {
                     Platform.runLater(() -> {
-                        currentTrackLabel.setText("No track playing.");
                         songTitle.setText("-");
                         artistName.setText("-");
                         albumCover.setImage(new Image("https://upload.wikimedia.org/wikipedia/commons/3/3c/Spotify_icon.svg"));
@@ -178,7 +177,6 @@ public class SpotifyController {
                     songTitle.setText(trackName);
                     artistName.setText(artist);
                     albumCover.setImage(new Image(imageUrl, true));
-                    currentTrackLabel.setText("Now Playing: " + trackName + " - " + artist);
                 });
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
