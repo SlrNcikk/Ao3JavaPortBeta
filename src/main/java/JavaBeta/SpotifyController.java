@@ -14,6 +14,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
+import javafx.application.Platform;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -22,7 +23,6 @@ import java.util.Map;
 public class SpotifyController {
 
     @FXML private TextField searchField;
-
     @FXML private Button searchButton;
     @FXML private ListView<String> searchResultsList;
     @FXML private Button playButton;
@@ -35,7 +35,7 @@ public class SpotifyController {
     @FXML private Label artistName;
     @FXML private ImageView albumCover;
     @FXML private VBox resultsBox;
-    @FXML private Label currentTrackLabel; // replaces trackLabel
+    @FXML private Label currentTrackLabel;
 
     private Timeline trackRefreshTimeline;
     private Map<String, String> lastSearchResults = new HashMap<>();
@@ -51,23 +51,21 @@ public class SpotifyController {
         refreshButton.setOnAction(e -> onRefresh());
         loginButton.setOnAction(e -> onLogin());
 
-        // Double-click search result → play/view
+        // Double-click search result → play
         searchResultsList.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
                 String selected = searchResultsList.getSelectionModel().getSelectedItem();
                 if (selected != null && lastSearchResults.containsKey(selected)) {
                     String uri = lastSearchResults.get(selected);
-                    try {
-                        if (uri.startsWith("spotify:album:") || uri.startsWith("spotify:playlist:")) {
-                            currentTrackLabel.setText("Viewing " + selected);
-                        } else {
+                    new Thread(() -> {
+                        try {
                             SpotifyService.playTrack(uri);
-                            currentTrackLabel.setText("Playing: " + selected);
+                            Platform.runLater(() -> currentTrackLabel.setText("Playing: " + selected));
+                        } catch (IOException | InterruptedException ex) {
+                            ex.printStackTrace();
+                            Platform.runLater(() -> currentTrackLabel.setText("Failed to play: " + selected));
                         }
-                    } catch (IOException ex) {
-                        currentTrackLabel.setText("Action failed.");
-                        ex.printStackTrace();
-                    }
+                    }).start();
                 }
             }
         });
@@ -77,7 +75,7 @@ public class SpotifyController {
         startTrackRefresh();
     }
 
-    /** 🔁 Automatically refresh track info every 10 seconds */
+    /** Automatically refresh track info every 10 seconds */
     private void startTrackRefresh() {
         trackRefreshTimeline = new Timeline(
                 new KeyFrame(Duration.seconds(10), event -> refreshTrackInfo())
@@ -86,7 +84,7 @@ public class SpotifyController {
         trackRefreshTimeline.play();
     }
 
-    /** 🔍 Handles music search */
+    /** Search Spotify */
     @FXML
     private void onSearch() {
         String query = searchField.getText();
@@ -104,11 +102,9 @@ public class SpotifyController {
                         return;
                     }
 
-                    for (String name : results.keySet()) {
-                        searchResultsList.getItems().add(name);
-                    }
-
+                    results.keySet().forEach(searchResultsList.getItems()::add);
                     lastSearchResults = results;
+
                     currentTrackLabel.setText("Found " + results.size() + " results for \"" + query + "\"");
 
                     String first = results.keySet().iterator().next();
@@ -117,92 +113,78 @@ public class SpotifyController {
                     albumCover.setImage(new Image("https://upload.wikimedia.org/wikipedia/commons/3/3c/Spotify_icon.svg"));
                 });
 
-            } catch (Exception e) {
+            } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
                 Platform.runLater(() -> currentTrackLabel.setText("Search failed: " + e.getMessage()));
             }
         }).start();
     }
 
-    /** 🔁 Refresh device and track info */
     @FXML
     private void onRefresh() {
-        try {
-            SpotifyService.findAndSetDeviceId();
-            refreshTrackInfo();
-        } catch (Exception e) {
-            e.printStackTrace();
-            currentTrackLabel.setText("Failed to refresh.");
-        }
+        new Thread(() -> {
+            try {
+                SpotifyService.findAndSetDeviceId();
+                refreshTrackInfo();
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+                Platform.runLater(() -> currentTrackLabel.setText("Failed to refresh."));
+            }
+        }).start();
     }
 
-    /** 🔑 Log in to Spotify */
     @FXML
     private void onLogin() {
-        try {
-            SpotifyService.authenticate();
-            loginButton.setText("Logged In!");
-            loginButton.setDisable(true);
-            refreshTrackInfo();
-        } catch (Exception e) {
-            e.printStackTrace();
-            currentTrackLabel.setText("Login failed.");
-        }
+        // 1. Update UI immediately to show work is starting
+        loginButton.setText("Logging in...");
+        loginButton.setDisable(true);
+
+        // 2. Start the authentication on a new background thread
+        new Thread(() -> {
+            try {
+                // 3. This is the long, blocking call.
+                // It runs safely in the background.
+                SpotifyService.authenticate();
+
+                // 4. --- SUCCESS ---
+                // Authentication is done! Send the UI updates
+                // back to the JavaFX Application Thread.
+                Platform.runLater(() -> {
+                    loginButton.setText("Logged In!");
+                    refreshTrackInfo(); // Now it's safe to refresh
+                });
+
+            } catch (Exception e) {
+                // 5. --- FAILURE ---
+                // If auth fails, print the error
+                e.printStackTrace();
+
+                // Let the user try again
+                Platform.runLater(() -> {
+                    loginButton.setText("Login Failed! Try Again.");
+                    loginButton.setDisable(false);
+                });
+            }
+        }).start();
     }
 
-    /** ▶️ Play */
-    @FXML
-    private void onPlay() {
-        try {
-            SpotifyService.play();
-            refreshTrackInfo();
-        } catch (Exception e) {
-            currentTrackLabel.setText("Error: " + e.getMessage());
-        }
-    }
+    @FXML private void onPlay() { executePlayerAction(() -> SpotifyService.play()); }
+    @FXML private void onPause() { executePlayerAction(() -> SpotifyService.pause()); }
+    @FXML private void onNext() { executePlayerAction(() -> SpotifyService.nextTrack()); }
+    @FXML private void onPrevious() { executePlayerAction(() -> SpotifyService.previousTrack()); }
 
-    /** ⏸ Pause */
-    @FXML
-    private void onPause() {
-        try {
-            SpotifyService.pause();
-            refreshTrackInfo();
-        } catch (Exception e) {
-            currentTrackLabel.setText("Error: " + e.getMessage());
-        }
-    }
-
-    /** ⏭ Next track */
-    @FXML
-    private void onNext() {
-        try {
-            SpotifyService.nextTrack();
-            refreshTrackInfo();
-        } catch (Exception e) {
-            currentTrackLabel.setText("Error: " + e.getMessage());
-        }
-    }
-
-    /** ⏮ Previous track */
-    @FXML
-    private void onPrevious() {
-        try {
-            SpotifyService.previousTrack();
-            refreshTrackInfo();
-        } catch (Exception e) {
-            currentTrackLabel.setText("Error: " + e.getMessage());
-        }
-    }
-
-
-
-    /** 🎵 Get current playing track */
+    /** Refresh current track info */
     private void refreshTrackInfo() {
         new Thread(() -> {
             try {
                 String json = SpotifyService.getCurrentTrackJson();
                 if (json == null || json.isBlank()) {
-                    Platform.runLater(() -> currentTrackLabel.setText("No track playing."));
+                    Platform.runLater(() -> {
+                        currentTrackLabel.setText("No track playing.");
+                        songTitle.setText("-");
+                        artistName.setText("-");
+                        albumCover.setImage(new Image("https://upload.wikimedia.org/wikipedia/commons/3/3c/Spotify_icon.svg"));
+                    });
                     return;
                 }
 
@@ -211,13 +193,8 @@ public class SpotifyController {
                 if (item == null) return;
 
                 String trackName = item.get("name").getAsString();
-                String artist = item.getAsJsonArray("artists")
-                        .get(0).getAsJsonObject()
-                        .get("name").getAsString();
-                String imageUrl = item.getAsJsonObject("album")
-                        .getAsJsonArray("images")
-                        .get(0).getAsJsonObject()
-                        .get("url").getAsString();
+                String artist = item.getAsJsonArray("artists").get(0).getAsJsonObject().get("name").getAsString();
+                String imageUrl = item.getAsJsonObject("album").getAsJsonArray("images").get(0).getAsJsonObject().get("url").getAsString();
 
                 Platform.runLater(() -> {
                     songTitle.setText(trackName);
@@ -226,10 +203,28 @@ public class SpotifyController {
                     currentTrackLabel.setText("Now Playing: " + trackName + " - " + artist);
                 });
 
-            } catch (Exception e) {
+            } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
                 Platform.runLater(() -> currentTrackLabel.setText("Unable to fetch track info."));
             }
         }).start();
+    }
+
+    /** Utility to execute play/pause/next/previous safely */
+    private void executePlayerAction(PlayerAction action) {
+        new Thread(() -> {
+            try {
+                action.run();
+                refreshTrackInfo();
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+                Platform.runLater(() -> currentTrackLabel.setText("Error: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    @FunctionalInterface
+    private interface PlayerAction {
+        void run() throws IOException, InterruptedException;
     }
 }
