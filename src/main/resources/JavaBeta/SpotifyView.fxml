@@ -20,7 +20,6 @@
 
     <left>
         <VBox alignment="CENTER" spacing="15" style="-fx-padding: 0 15 0 0;">
-            <Label text="Spotify Controller" style="-fx-font-size: 18; -fx-font-weight: bold;" />
             <ImageView fx:id="albumCover" fitHeight="150" fitWidth="150" preserveRatio="true" />
             <Label fx:id="songTitle" text="Nothing playing..." style="-fx-font-size: 14;" />
             <Label fx:id="artistName" text="Artist" />
