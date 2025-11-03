@@ -1,5 +1,8 @@
 package JavaBeta;
 
+// Add import for the new discovery class
+import JavaBeta.UdpDiscovery;
+
 import JavaBeta.ChatController;
 
 import java.io.IOException;
@@ -15,7 +18,10 @@ public class P2PPeer {
     private final ChatController controller;
     // Use a thread-safe set to manage connections from multiple threads
     private final Set<Socket> connectedPeers;
-    private PeerReceiver receiver; // The dedicated server listener thread
+    private PeerReceiver receiver; // The dedicated TCP server listener thread
+
+    // NEW: Field for the UDP discovery thread
+    private UdpDiscovery discoveryThread;
 
     public P2PPeer(int port, ChatController controller) {
         this.listeningPort = port;
@@ -34,10 +40,21 @@ public class P2PPeer {
         }
     }
 
+    // NEW METHOD: Starts the UDP discovery thread
+    public void startDiscovery() {
+        // We pass the controller and the TCP port we are listening on
+        this.discoveryThread = new UdpDiscovery(controller, listeningPort);
+        this.discoveryThread.start();
+    }
+
     // Stops all networking threads and closes all sockets
+    // UPDATED: Now shuts down the UDP discovery thread as well
     public void stopListening() {
         if (receiver != null) {
             receiver.shutdown();
+        }
+        if (discoveryThread != null) { // NEW: Gracefully shut down the UDP thread
+            discoveryThread.shutdown();
         }
         synchronized (connectedPeers) {
             for (Socket socket : connectedPeers) {

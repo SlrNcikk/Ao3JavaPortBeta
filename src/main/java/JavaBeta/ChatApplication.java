@@ -25,6 +25,8 @@ public class ChatApplication extends Application {
 
         this.peer.startListening();
 
+        this.peer.startDiscovery();
+
         stage.setTitle("P2P Chat - Listening on Port " + PEER_PORT);
         stage.setScene(scene);
         stage.show();
