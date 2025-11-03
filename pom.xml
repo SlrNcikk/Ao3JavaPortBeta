@@ -13,11 +13,10 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javafx.version>21.0.2</javafx.version>
         <ikonli.version>12.3.1</ikonli.version>
+        <main.class>JavaBeta.App</main.class>
     </properties>
 
     <dependencies>
-
-        <!-- JSON libraries -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
@@ -25,10 +24,10 @@
         </dependency>
 
         <dependency>
-        <groupId>org.json</groupId>
-        <artifactId>json</artifactId>
-        <version>20240303</version>
-    </dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20240303</version>
+        </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -36,7 +35,6 @@
             <version>2.0.12</version>
         </dependency>
 
-        <!-- Apache HTTP Client 5 -->
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
@@ -49,14 +47,12 @@
             <version>5.2.4</version>
         </dependency>
 
-        <!-- Jsoup -->
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
             <version>1.17.2</version>
         </dependency>
 
-        <!-- JavaFX -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
@@ -73,7 +69,6 @@
             <version>${javafx.version}</version>
         </dependency>
 
-        <!-- Ikonli icons -->
         <dependency>
             <groupId>org.kordamp.ikonli</groupId>
             <artifactId>ikonli-javafx</artifactId>
@@ -105,7 +100,6 @@
 
     <build>
         <plugins>
-            <!-- Compiler plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -116,7 +110,6 @@
                 </configuration>
             </plugin>
 
-            <!-- JavaFX Maven plugin -->
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
@@ -129,7 +122,12 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <mainClass>JavaBeta.App</mainClass>
+                    <mainClass>${main.class}</mainClass>
+
+                    <options>
+                        <option>--add-modules</option>
+                        <option>javafx.controls,javafx.fxml,javafx.web</option>
+                    </options>
                 </configuration>
             </plugin>
         </plugins>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:controller="JavaBeta.ChatController"
+      xmlns:fx="http://javafx.com/fxml/1"
+      xmlns="http://javafx.com/javafx/21"
+      alignment="TOP_CENTER"
+      spacing="10.0">
+
+    <padding>
+        <Insets top="10.0" right="10.0" bottom="10.0" left="10.0" />
+    </padding>
+
+    <HBox alignment="CENTER_LEFT" spacing="10.0">
+        <Label text="Peer IP:" />
+        <TextField fx:id="targetIpInput"
+                   promptText="Target IP (e.g., 127.0.0.1)"
+                   HBox.hgrow="ALWAYS" />
+        <Label text="Port:" />
+        <TextField fx:id="targetPortInput"
+                   promptText="Port (e.g., 5001)"
+                   maxWidth="100"/>
+        <Button text="Connect" onAction="#handleConnectAction"/>
+    </HBox>
+
+    <Separator/>
+
+    <TextArea fx:id="chatDisplay"
+              editable="false"
+              VBox.vgrow="ALWAYS"
+              wrapText="true"
+              promptText="Chat history and system messages will appear here..."/>
+
+    <HBox alignment="CENTER_LEFT" spacing="10.0">
+        <TextField fx:id="messageInput"
+                   promptText="Type your message here..."
+                   HBox.hgrow="ALWAYS"
+                   onAction="#handleSendAction"/>
+        <Button text="Send" onAction="#handleSendAction"/>
+    </HBox>
+
+</VBox>

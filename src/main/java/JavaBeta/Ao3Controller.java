@@ -88,6 +88,44 @@ public class Ao3Controller {
     private String darkThemePath;
 
     @FXML
+    private void handleLaunchChat() {
+        try {
+            // 1. Load the Chat Application FXML
+            FXMLLoader fxmlLoader = new FXMLLoader(
+                    getClass().getResource("chat-view.fxml"));
+            Parent root = fxmlLoader.load();
+
+            // 2. Initialize the Chat Logic (Same as what was in ChatApplication.start)
+            Stage chatStage = new Stage();
+
+            // NOTE: The PEER_PORT needs to be dynamic if you plan to launch
+            // multiple chat instances from the same main application in the future.
+            final int PEER_PORT = 5000;
+
+            // Initialize the networking core and inject it into the controller
+            ChatController chatController = fxmlLoader.getController();
+            P2PPeer peer = new P2PPeer(PEER_PORT, chatController);
+
+            chatController.setPeer(peer);
+            peer.startListening();
+
+            // 3. Display the new chat window
+            chatStage.setTitle("P2P Chat - Listening on Port " + PEER_PORT);
+            chatStage.setScene(new Scene(root, 600, 400));
+
+            // Optional: Add a listener to stop the peer when the chat window is closed
+            chatStage.setOnCloseRequest(e -> peer.stopListening());
+
+            chatStage.show();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            // Handle error, e.g., show an Alert
+            System.err.println("Error loading chat view: " + e.getMessage());
+        }
+    }
+
+    @FXML
     private void openSpotify() {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/SpotifyView.fxml"));
@@ -101,6 +139,8 @@ public class Ao3Controller {
             e.printStackTrace();
         }
     }
+
+
 
     @FXML
     public void initialize() {
@@ -207,6 +247,8 @@ public class Ao3Controller {
         // Initialize Time Display
         setupClock();
     }
+
+
 
     private void setupClock() {
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm:ss a");
