@@ -43,6 +43,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
+import java.util.stream.Collectors; // NEW IMPORT
 import java.util.stream.Stream;
 
 public class Ao3Controller {
@@ -192,6 +193,8 @@ public class Ao3Controller {
         }
 
         // --- Configure Online TableView Columns ---
+        // This setup is correct because your new Work.java (File 6)
+        // has titleProperty(), authorProperty(), tagsProperty(), etc.
         if (titleColumn != null) { titleColumn.setCellValueFactory(new PropertyValueFactory<>("title")); }
         if (authorColumn != null) { authorColumn.setCellValueFactory(new PropertyValueFactory<>("author")); }
         if (tagsColumn != null) { tagsColumn.setCellValueFactory(new PropertyValueFactory<>("tags")); }
@@ -225,7 +228,13 @@ public class Ao3Controller {
                     System.out.println("Selected (online): " + selected.getTitle());
                 } else if (event.getClickCount() == 2) {
                     System.out.println("Opening (online): " + selected.getTitle());
-                    loadAndShowStory(selected);
+
+                    // --- CHANGED ---
+                    // Get the full list of works from the table
+                    List<Work> allWorks = new ArrayList<>(resultsTableView.getItems());
+                    // Pass the selected work AND the full list
+                    loadAndShowStory(selected, allWorks);
+                    // ---
                 }
             });
         }
@@ -428,6 +437,7 @@ public class Ao3Controller {
                         }
 
                         // Store file path in 'url' field, "N/A" for tags/date
+                        // We use the new Work.java constructor
                         offlineWorks.add(new Work(title, author, path.toFile().getAbsolutePath(), "N/A", "N/A"));
                     });
 
@@ -441,7 +451,11 @@ public class Ao3Controller {
     }
 
     // --- Methods for loading stories and launching reader ---
-    private void loadAndShowStory(Work work) {
+
+    // --- CHANGED ---
+    // This method now takes the full list of works to pass it along.
+    private void loadAndShowStory(Work work, List<Work> allWorks) {
+        // ---
         Alert loadingAlert = new Alert(Alert.AlertType.INFORMATION);
         loadingAlert.setTitle("Loading Story");
         loadingAlert.setHeaderText("Please wait, fetching story content...");
@@ -451,7 +465,10 @@ public class Ao3Controller {
         Task<String> task = createFetchStoryTask(work);
         task.setOnSucceeded(e -> {
             loadingAlert.close();
-            launchReadingWindow(work, task.getValue()); // Pass Work obj for online
+            // --- CHANGED ---
+            // Pass the allWorks list to the launch method
+            launchReadingWindow(work, task.getValue(), allWorks);
+            // ---
         });
         task.setOnFailed(e -> {
             loadingAlert.close();
@@ -477,40 +494,57 @@ public class Ao3Controller {
         }
     }
 
+    // --- CHANGED ---
     // Overload for Online stories
-    private void launchReadingWindow(Work work, String content) {
-        launchReadingWindowInternal(work.getTitle(), content, work, false);
+    // Now accepts the allWorks list
+    private void launchReadingWindow(Work work, String content, List<Work> allWorks) {
+        launchReadingWindowInternal(work.getTitle(), content, work, false, allWorks);
     }
+    // ---
 
     // Overload for Offline stories
     private void launchReadingWindow(String title, String content, boolean isOffline) {
-        launchReadingWindowInternal(title, content, null, isOffline);
+        // --- CHANGED ---
+        // Pass null for the allWorks list
+        launchReadingWindowInternal(title, content, null, isOffline, null);
+        // ---
     }
 
+    // --- CHANGED ---
     // Combined internal method to launch the reader window
-    private void launchReadingWindowInternal(String title, String content, Work work, boolean isOffline) {
+    // Now accepts the allWorks list
+    private void launchReadingWindowInternal(String title, String content, Work work, boolean isOffline, List<Work> allWorks) {
+        // ---
         try {
+            // This path MUST match your project structure
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/ReadingView.fxml"));
             Parent root = loader.load();
             ReadingController readingController = loader.getController();
 
             Stage readerStage = new Stage();
             Scene scene = new Scene(root);
-            URL stylesheetUrl = getClass().getResource("/JavaBeta/styles.css");
-            if (stylesheetUrl != null) scene.getStylesheets().add(stylesheetUrl.toExternalForm());
+
+            // Note: styles.css is applied to the main scene, not the reader
+            // URL stylesheetUrl = getClass().getResource("/JavaBeta/styles.css");
+            // if (stylesheetUrl != null) scene.getStylesheets().add(stylesheetUrl.toExternalForm());
+
             readerStage.setScene(scene);
             readerStage.setTitle(title);
 
             if (isOffline) {
+                // Call the offline loadStory method
                 readingController.loadStory(title, content, true);
             } else if (work != null) {
-                readingController.loadStory(work, content);
+                // --- CHANGED ---
+                // Call the NEW online loadStory method, passing the full list
+                readingController.loadStory(work, content, allWorks);
+                // ---
             } else {
                 showError("Error determining story type for reader window.");
                 return;
             }
 
-            readerStage.initModality(Modality.NONE);
+            readerStage.initModality(Modality.NONE); // Changed to NONE so you can use both windows
             readerStage.show();
 
         } catch (IOException e) {
@@ -604,12 +638,15 @@ public class Ao3Controller {
                 try {
                     Document doc = Jsoup.connect(url)
                             .userAgent(userAgent)
-                            .referrer("https://www.google.com")
+                            .referrer("https.www.google.com")
                             .get();
                     Elements workElements = doc.select("li.work.blurb");
                     System.out.println("DEBUG: Connection successful. Found " + workElements.size() + " works on the page.");
 
-                    final int MAX_TAGS_TO_SHOW = 3;
+                    // --- CHANGED ---
+                    // Removed the 3-tag limit to get ALL tags for better recommendations
+                    // final int MAX_TAGS_TO_SHOW = 3;
+                    // ---
 
                     for (Element workEl : workElements) {
                         Element titleEl = workEl.selectFirst("h4.heading a[href^='/works/']");
@@ -623,14 +660,15 @@ public class Ao3Controller {
                             String author = authorEl.text();
                             String lastUpdated = dateEl.text();
 
-                            List<String> tagsList = new ArrayList<>();
-                            for (Element tagEl : tagElements) {
-                                tagsList.add(tagEl.text());
-                                if (tagsList.size() >= MAX_TAGS_TO_SHOW) break;
-                            }
+                            // --- CHANGED ---
+                            // Get ALL tags, not just the first 3
+                            List<String> tagsList = tagElements.stream()
+                                    .map(Element::text)
+                                    .collect(Collectors.toList());
                             String tags = String.join(", ", tagsList);
-                            if (tagElements.size() > MAX_TAGS_TO_SHOW) tags += ", ...";
+                            // ---
 
+                            // We pass the full tag string to the new Work.java constructor
                             worksList.add(new Work(title, author, workUrl, tags, lastUpdated));
                         }
                     }
@@ -661,3 +699,4 @@ public class Ao3Controller {
     }
 
 } // End of Ao3Controller class
+

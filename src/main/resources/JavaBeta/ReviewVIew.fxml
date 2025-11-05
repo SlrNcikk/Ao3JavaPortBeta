@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<!--
+  This is File 3 (New File): ReviewView.fxml
+  - This is the UI for the new popup window.
+  - Its controller is "JavaBeta.ReviewController"
+-->
+<VBox
+        fx:controller="JavaBeta.ReviewController"
+        xmlns:fx="http://javafx.com/fxml/1"
+        xmlns="http://javafx.com/javafx/17"
+        prefWidth="500.0"
+        prefHeight="550.0"
+        spacing="10"
+        style="-fx-background-color: #f4f4f4;"
+>
+    <padding>
+        <Insets top="15" right="15" bottom="15" left="15" />
+    </padding>
+
+    <Label fx:id="storyTitleLabel" text="Review for: [Story Title]" style="-fx-font-weight: bold;">
+        <font>
+            <Font size="16.0" />
+        </font>
+    </Label>
+    <Label text="Please leave your rating and comments below." />
+
+    <Separator />
+
+    <!-- Rating Slider -->
+    <Label text="Your Rating (1-5 Stars):" />
+    <Slider fx:id="ratingSlider" max="5" min="1" majorTickUnit="1" minorTickCount="0"
+            blockIncrement="1" snapToTicks="true" showTickLabels="true" showTickMarks="true" />
+
+    <!-- Comment Box -->
+    <Label text="Your Review:" />
+    <TextArea fx:id="commentTextArea" wrapText="true" prefHeight="100.0" VBox.vgrow="SOMETIMES" />
+
+    <Button fx:id="submitReviewButton" text="Submit Review" onAction="#handleSubmitReview" maxWidth="Infinity" style="-fx-font-weight: bold;" />
+
+    <Separator />
+
+    <!-- Recommendation Section -->
+    <Label text="Recommended For You:">
+        <font>
+            <Font size="14.0" />
+        </font>
+        <VBox.margin>
+            <Insets top="5.0" />
+        </VBox.margin>
+    </Label>
+    <Label text="Based on your 4 or 5-star rating for this story."
+           style="-fx-font-size: 11px; -fx-text-fill: #666;"
+    />
+
+    <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true">
+        <ListView fx:id="recommendationsListView" prefHeight="150.0" />
+    </ScrollPane>
+
+</VBox>
+

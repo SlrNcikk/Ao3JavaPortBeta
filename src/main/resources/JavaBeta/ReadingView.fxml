@@ -3,21 +3,49 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.ChoiceBox?>
+<?import javafx.scene.control.Label?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.Priority?>
 <?import javafx.scene.layout.VBox?>
-<?import javafx.scene.web.WebView?> <VBox prefHeight="700.0" prefWidth="800.0" spacing="10.0" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="JavaBeta.ReadingController">
+<?import javafx.scene.web.WebView?>
+
+<!--
+  This is File 2 (Updated): ReadingView.fxml
+  - Make sure this line has "JavaBeta.ReadingController"
+-->
+<VBox
+        fx:controller="JavaBeta.ReadingController"
+        xmlns:fx="http://javafx.com/fxml/1"
+        spacing="10"
+        prefHeight="600.0" prefWidth="800.0"
+        style="-fx-background-color: #f4f4f4;"
+        xmlns="http://javafx.com/javafx/17"
+>
     <padding>
-        <Insets bottom="10.0" left="10.0" right="10.0" top="10.0" />
+        <Insets top="10" right="10" bottom="10" left="10" />
     </padding>
-    <children>
-        <HBox alignment="CENTER_LEFT" spacing="10.0">
-            <children>
-                <Button fx:id="downloadButton" onAction="#onDownloadButtonClick" text="Download Story" />
-                <Region HBox.hgrow="ALWAYS" />
-                <ChoiceBox fx:id="themeChoiceBox" prefWidth="150.0" />
-            </children>
+
+    <!-- Top control bar -->
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Label text="Theme:"/>
+        <ChoiceBox fx:id="themeChoiceBox"/>
+
+        <!-- Spacer to push buttons to the right -->
+        <HBox HBox.hgrow="ALWAYS" alignment="CENTER_RIGHT" spacing="10">
+            <!-- This is the new button -->
+            <Button fx:id="addReviewButton" text="Add a Review" onAction="#handleAddReviewClick" />
+
+            <Button fx:id="downloadButton" text="Download Story" onAction="#onDownloadButtonClick"/>
         </HBox>
-        <WebView fx:id="storyWebView" VBox.vgrow="ALWAYS" />
-    </children>
+    </HBox>
+
+    <!-- WebView to display the story content -->
+    <WebView fx:id="storyWebView" VBox.vgrow="ALWAYS"/>
+
+    <!--
+      All the old review/recommendation UI has been REMOVED from this file.
+      It is now in ReviewView.fxml.
+    -->
+
 </VBox>
+
