@@ -21,9 +21,25 @@ public class Work {
     private final StringProperty url;
     private final StringProperty tagsString; // This is the raw string "Tag1, Tag2, ..."
     private final StringProperty lastUpdated;
+    private StringProperty authorUrl;
 
     // This is the new Set for the recommendation engine
     private final Set<String> tagsSet;
+
+    public String getAuthorUrl() {
+        return authorUrlProperty().get();
+    }
+
+    public void setAuthorUrl(String authorUrl) {
+        this.authorUrlProperty().set(authorUrl);
+    }
+
+    public StringProperty authorUrlProperty() {
+        if (authorUrl == null) {
+            authorUrl = new SimpleStringProperty(this, "authorUrl");
+        }
+        return authorUrl;
+    }
 
     public Work(String title, String author, String url, String tags, String lastUpdated) {
         this.title = new SimpleStringProperty(title);

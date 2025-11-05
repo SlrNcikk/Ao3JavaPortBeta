@@ -10,27 +10,27 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import java.awt.Desktop; // Keep for onViewFolderClick
-import java.util.Optional; // Keep for onDeleteStoryClick
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
-// --- Ikonli Imports ---
-import org.kordamp.ikonli.javafx.FontIcon;
-import org.kordamp.ikonli.elusive.Elusive;
-import org.kordamp.ikonli.entypo.Entypo;
-import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid; // For the trash icon
-// --- END Ikonli Imports ---
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.kordamp.ikonli.elusive.Elusive;
+import org.kordamp.ikonli.entypo.Entypo;
+import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
+import org.kordamp.ikonli.javafx.FontIcon;
 
+import java.awt.*;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -42,8 +42,9 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.StringJoiner;
-import java.util.stream.Collectors; // NEW IMPORT
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Ao3Controller {
@@ -141,6 +142,15 @@ public class Ao3Controller {
         }
     }
 
+    private void openAuthorProfile(Work work) {
+        if (work == null) return;
+
+        System.out.println("--- OPENING AUTHOR PROFILE ---");
+        System.out.println("Author Name: " + work.getAuthor());
+        System.out.println("Author URL: " + work.getAuthorUrl());
+
+        // TODO: We will add the code here to load AuthorProfileView.fxml
+    }
 
 
     @FXML
@@ -193,16 +203,52 @@ public class Ao3Controller {
         }
 
         // --- Configure Online TableView Columns ---
-        // This setup is correct because your new Work.java (File 6)
-        // has titleProperty(), authorProperty(), tagsProperty(), etc.
         if (titleColumn != null) { titleColumn.setCellValueFactory(new PropertyValueFactory<>("title")); }
-        if (authorColumn != null) { authorColumn.setCellValueFactory(new PropertyValueFactory<>("author")); }
+        if (authorColumn != null) {
+            authorColumn.setCellValueFactory(new PropertyValueFactory<>("author"));
+
+            // --- ADDED TWEAK FOR ONLINE AUTHOR COLUMN ---
+            authorColumn.setCellFactory(column -> new TableCell<Work, String>() {
+                private final Hyperlink link = new Hyperlink();
+                @Override
+                protected void updateItem(String authorName, boolean empty) {
+                    super.updateItem(authorName, empty);
+                    if (empty || authorName == null) {
+                        setGraphic(null);
+                    } else {
+                        link.setText(authorName);
+                        link.setOnAction(event -> openAuthorProfile(getTableView().getItems().get(getIndex())));
+                        setGraphic(link);
+                    }
+                }
+            });
+            // --- END OF TWEAK ---
+        }
         if (tagsColumn != null) { tagsColumn.setCellValueFactory(new PropertyValueFactory<>("tags")); }
         if (updatedColumn != null) { updatedColumn.setCellValueFactory(new PropertyValueFactory<>("lastUpdated")); }
 
         // --- Configure Offline TableView Columns ---
         if (libraryTitleColumn != null) { libraryTitleColumn.setCellValueFactory(new PropertyValueFactory<>("title")); }
-        if (libraryAuthorColumn != null) { libraryAuthorColumn.setCellValueFactory(new PropertyValueFactory<>("author")); }
+        if (libraryAuthorColumn != null) {
+            libraryAuthorColumn.setCellValueFactory(new PropertyValueFactory<>("author"));
+
+            // --- ADDED TWEAK FOR OFFLINE AUTHOR COLUMN ---
+            libraryAuthorColumn.setCellFactory(column -> new TableCell<Work, String>() {
+                private final Hyperlink link = new Hyperlink();
+                @Override
+                protected void updateItem(String authorName, boolean empty) {
+                    super.updateItem(authorName, empty);
+                    if (empty || authorName == null) {
+                        setGraphic(null);
+                    } else {
+                        link.setText(authorName);
+                        link.setOnAction(event -> openAuthorProfile(getTableView().getItems().get(getIndex())));
+                        setGraphic(link);
+                    }
+                }
+            });
+            // --- END OF TWEAK ---
+        }
         if (libraryTagsColumn != null) { libraryTagsColumn.setCellValueFactory(new PropertyValueFactory<>("tags")); }
         if (libraryUpdatedColumn != null) { libraryUpdatedColumn.setCellValueFactory(new PropertyValueFactory<>("lastUpdated")); }
 
@@ -228,13 +274,8 @@ public class Ao3Controller {
                     System.out.println("Selected (online): " + selected.getTitle());
                 } else if (event.getClickCount() == 2) {
                     System.out.println("Opening (online): " + selected.getTitle());
-
-                    // --- CHANGED ---
-                    // Get the full list of works from the table
                     List<Work> allWorks = new ArrayList<>(resultsTableView.getItems());
-                    // Pass the selected work AND the full list
                     loadAndShowStory(selected, allWorks);
-                    // ---
                 }
             });
         }
@@ -256,7 +297,6 @@ public class Ao3Controller {
         // Initialize Time Display
         setupClock();
     }
-
 
 
     private void setupClock() {
