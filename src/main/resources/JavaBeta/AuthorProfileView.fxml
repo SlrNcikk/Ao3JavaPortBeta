@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane prefHeight="600.0" prefWidth="800.0" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="JavaBeta.AuthorProfileController">
+    <left>
+        <VBox prefWidth="250.0" spacing="10.0" style="-fx-padding: 15; -fx-border-color: #e0e0e0; -fx-border-width: 0 1 0 0;">
+            <children>
+                <ImageView fx:id="pfpImageView" fitHeight="220.0" fitWidth="220.0" pickOnBounds="true" preserveRatio="true" />
+
+                <Label text="Profile Details" style="-fx-font-size: 16; -fx-font-weight: bold;" />
+                <VBox fx:id="profileDetailsBox" spacing="5.0" />
+
+                <Label text="Personal Note" style="-fx-font-size: 16; -fx-font-weight: bold;">
+                    <VBox.margin>
+                        <Insets top="15.0" />
+                    </VBox.margin>
+                </Label>
+                <TextArea fx:id="personalNoteArea" prefHeight="200.0" prefWidth="200.0" wrapText="true" VBox.vgrow="ALWAYS" promptText="Your private notes about this author..." />
+            </children>
+        </VBox>
+    </left>
+    <center>
+        <VBox spacing="10.0" style="-fx-padding: 15;">
+            <children>
+                <Label text="PROFILE VIEWER" style="-fx-font-size: 14; -fx-text-fill: #555;" />
+                <Label fx:id="authorNameLabel" text="Author Name" style="-fx-font-size: 28; -fx-font-weight: bold;" />
+
+                <TabPane fx:id="contentTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
+                    <tabs>
+                        <Tab fx:id="creationsTab" text="Creations">
+                            <content>
+                                <ListView fx:id="creationsListView" />
+                            </content>
+                        </Tab>
+                        <Tab fx:id="bookmarksTab" text="Bookmarks">
+                            <content>
+                                <ListView fx:id="bookmarksListView" />
+                            </content>
+                        </Tab>
+                        <Tab fx:id="collectionsTab" text="Collections">
+                            <content>
+                                <ListView fx:id="collectionsListView" />
+                            </content>
+                        </Tab>
+                    </tabs>
+                </TabPane>
+            </children>
+        </VBox>
+    </center>
+</BorderPane>

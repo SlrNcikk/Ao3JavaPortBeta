@@ -4,11 +4,14 @@ import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
-import javafx.concurrent.Task;
-import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import java.io.IOException;
+import javafx.concurrent.Task;
+import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -18,8 +21,6 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -31,7 +32,6 @@ import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.javafx.FontIcon;
 
 import java.awt.*;
-import java.io.IOException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -143,13 +143,45 @@ public class Ao3Controller {
     }
 
     private void openAuthorProfile(Work work) {
-        if (work == null) return;
+        if (work == null) {
+            return; // Safety check
+        }
+
+        // This is the safety check for "orphan_account" or "Anonymous"
+        if (work.getAuthorUrl() == null) {
+            System.out.println("Cannot open profile for " + work.getAuthor() + ". No URL provided.");
+            showInfo("Profile Not Available", "Cannot open a profile for '" + work.getAuthor() + "'.");
+            return;
+        }
 
         System.out.println("--- OPENING AUTHOR PROFILE ---");
         System.out.println("Author Name: " + work.getAuthor());
         System.out.println("Author URL: " + work.getAuthorUrl());
 
-        // TODO: We will add the code here to load AuthorProfileView.fxml
+        try {
+            // 1. Load the FXML file
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/AuthorProfileView.fxml"));
+            Parent root = loader.load();
+
+            // 2. Get the controller
+            AuthorProfileController controller = loader.getController();
+
+            // 3. Pass the data to the new controller
+            controller.loadAuthorData(work.getAuthor(), work.getAuthorUrl());
+
+            // 4. Create and show the new window
+            Stage stage = new Stage();
+            stage.setTitle(work.getAuthor() + "'s Profile");
+            stage.setScene(new Scene(root));
+
+            // This blocks the main window, which is good for a profile
+            stage.initModality(Modality.APPLICATION_MODAL);
+            stage.show();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            showError("Could not load the Author Profile window: " + e.getMessage());
+        }
     }
 
 
@@ -478,7 +510,11 @@ public class Ao3Controller {
 
                         // Store file path in 'url' field, "N/A" for tags/date
                         // We use the new Work.java constructor
-                        offlineWorks.add(new Work(title, author, path.toFile().getAbsolutePath(), "N/A", "N/A"));
+                        Work offlineWork = new Work(title, author, path.toFile().getAbsolutePath(), "N/A", "N/A");
+
+                        // Set null authorUrl for offline works so profile doesn't open
+                        offlineWork.setAuthorUrl(null);
+                        offlineWorks.add(offlineWork);
                     });
 
             libraryTableView.getItems().addAll(offlineWorks); // <-- CORRECTED
@@ -665,6 +701,7 @@ public class Ao3Controller {
     }
 
     // --- Web Scraping Tasks ---
+
     private Task<List<Work>> createFetchWorksTask(String query) {
         return new Task<>() {
             @Override
@@ -683,42 +720,68 @@ public class Ao3Controller {
                     Elements workElements = doc.select("li.work.blurb");
                     System.out.println("DEBUG: Connection successful. Found " + workElements.size() + " works on the page.");
 
-                    // --- CHANGED ---
-                    // Removed the 3-tag limit to get ALL tags for better recommendations
-                    // final int MAX_TAGS_TO_SHOW = 3;
-                    // ---
 
                     for (Element workEl : workElements) {
                         Element titleEl = workEl.selectFirst("h4.heading a[href^='/works/']");
-                        Element authorEl = workEl.selectFirst("a[rel=author]");
+                        Element authorEl = workEl.selectFirst("a[rel=author]"); // This is the <a> tag
                         Element dateEl = workEl.selectFirst("p.datetime");
                         Elements tagElements = workEl.select("ul.tags a.tag");
 
-                        if (titleEl != null && authorEl != null && dateEl != null) {
+                        if (titleEl != null && dateEl != null) { // authorEl can be null
                             String title = titleEl.text();
                             String workUrl = "https://archiveofourown.org" + titleEl.attr("href");
-                            String author = authorEl.text();
+                            String author;
+                            String authorUrl;
+
+                            if (authorEl != null) {
+                                author = authorEl.text();
+
+                                // ✅ --- THIS IS THE FIX --- ✅
+                                // Check for special accounts *before* saving the URL.
+                                if (author.equals("orphan_account") || author.equals("Anonymous")) {
+                                    authorUrl = null; // Explicitly set to null
+                                } else {
+                                    authorUrl = "https://archiveofourown.org" + authorEl.attr("href");
+                                }
+                                // ✅ --- END OF FIX --- ✅
+
+                            } else {
+                                // Fallback logic for when no <a> tag is found
+                                Element headingEl = workEl.selectFirst("h4.heading");
+                                String headingText = (headingEl != null) ? headingEl.text() : "";
+                                String[] headingParts = headingText.split(" by ");
+                                if (headingParts.length > 1) {
+                                    author = headingParts[1];
+                                } else {
+                                    author = "Anonymous"; // Fallback
+                                }
+                                authorUrl = null;
+                            }
+
                             String lastUpdated = dateEl.text();
 
-                            // --- CHANGED ---
-                            // Get ALL tags, not just the first 3
-                            List<String> tagsList = tagElements.stream()
-                                    .map(Element::text)
-                                    .collect(Collectors.toList());
+                            List<String> tagsList = tagElements.stream().map(Element::text).collect(Collectors.toList());
                             String tags = String.join(", ", tagsList);
-                            // ---
 
-                            // We pass the full tag string to the new Work.java constructor
-                            worksList.add(new Work(title, author, workUrl, tags, lastUpdated));
+                            // Pass data to the Work object
+                            Work newWork = new Work(title, author, workUrl, tags, lastUpdated);
+                            newWork.setAuthorUrl(authorUrl); // Set the (now correct) author URL
+                            worksList.add(newWork);
+
                         }
                     }
+
                 } catch (Exception e) {
                     System.err.println("DEBUG: Scraping failed!");
                     e.printStackTrace();
                     throw e;
                 }
-                if (!worksList.isEmpty()) { Thread.sleep(300); }
+
+                if (!worksList.isEmpty()) {
+                    Thread.sleep(300);
+                }
                 return worksList;
+
             }
         };
     }
@@ -739,4 +802,3 @@ public class Ao3Controller {
     }
 
 } // End of Ao3Controller class
-
