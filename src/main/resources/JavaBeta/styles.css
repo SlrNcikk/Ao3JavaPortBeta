@@ -15,6 +15,9 @@
     -fx-text-fill: #dcdcdc;
 }
 
+.clickable {
+    -fx-cursor: hand;
+}
 /* Dark Theme */
 .root {
     /* Base background color */
