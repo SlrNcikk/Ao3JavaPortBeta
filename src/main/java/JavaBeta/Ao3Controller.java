@@ -8,11 +8,17 @@ import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 import javafx.stage.FileChooser; // For picking images
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.geometry.Pos;
 import javafx.scene.text.TextAlignment;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.control.ContextMenu;
@@ -43,6 +49,10 @@ import javafx.scene.layout.TilePane; // Import for TilePane
 import javafx.scene.layout.BorderPane; // RESTORED
 import javafx.scene.layout.StackPane; // RESTORED
 import javafx.util.Duration;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.kordamp.ikonli.elusive.Elusive;
 import org.kordamp.ikonli.entypo.Entypo;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
@@ -132,16 +142,97 @@ public class Ao3Controller {
     // --- Restored: handleLaunchChat, openSpotify, openAuthorProfile ---
     @FXML
     private void handleLaunchChat() {
-        // ... (existing code)
+        try {
+            // 1. Load the Chat Application FXML
+            FXMLLoader fxmlLoader = new FXMLLoader(
+                    getClass().getResource("chat-view.fxml"));
+            Parent root = fxmlLoader.load();
+
+            // 2. Initialize the Chat Logic (Same as what was in ChatApplication.start)
+            Stage chatStage = new Stage();
+
+            // NOTE: The PEER_PORT needs to be dynamic if you plan to launch
+            // multiple chat instances from the same main application in the future.
+            final int PEER_PORT = 5000;
+
+            // Initialize the networking core and inject it into the controller
+            ChatController chatController = fxmlLoader.getController();
+            P2PPeer peer = new P2PPeer(PEER_PORT, chatController);
+
+            chatController.setPeer(peer);
+            peer.startListening();
+
+            // 3. Display the new chat window
+            chatStage.setTitle("P2P Chat - Listening on Port " + PEER_PORT);
+            chatStage.setScene(new Scene(root, 600, 400));
+
+            // Optional: Add a listener to stop the peer when the chat window is closed
+            chatStage.setOnCloseRequest(e -> peer.stopListening());
+
+            chatStage.show();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            // Handle error, e.g., show an Alert
+            System.err.println("Error loading chat view: " + e.getMessage());
+        }
     }
 
     @FXML
     private void openSpotify() {
-        // ... (existing code)
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/SpotifyView.fxml"));
+            Parent root = loader.load();
+
+            Stage stage = new Stage();
+            stage.setTitle("Spotify Player");
+            stage.setScene(new Scene(root));
+            stage.show();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void openAuthorProfile(Work work) {
-        // ... (existing code)
+        if (work == null) {
+            return; // Safety check
+        }
+
+        // This is the safety check for "orphan_account" or "Anonymous"
+        if (work.getAuthorUrl() == null) {
+            System.out.println("Cannot open profile for " + work.getAuthor() + ". No URL provided.");
+            showInfo("Profile Not Available", "Cannot open a profile for '" + work.getAuthor() + "'.");
+            return;
+        }
+
+        System.out.println("--- OPENING AUTHOR PROFILE ---");
+        System.out.println("Author Name: " + work.getAuthor());
+        System.out.println("Author URL: " + work.getAuthorUrl());
+
+        try {
+            // 1. Load the FXML file
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/AuthorProfileView.fxml"));
+            Parent root = loader.load();
+
+            // 2. Get the controller
+            AuthorProfileController controller = loader.getController();
+
+            // 3. Pass the data to the new controller
+            controller.loadAuthorData(work.getAuthor(), work.getAuthorUrl());
+
+            // 4. Create and show the new window
+            Stage stage = new Stage();
+            stage.setTitle(work.getAuthor() + "'s Profile");
+            stage.setScene(new Scene(root));
+
+            // This blocks the main window, which is good for a profile
+            stage.initModality(Modality.APPLICATION_MODAL);
+            stage.show();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            showError("Could not load the Author Profile window: " + e.getMessage());
+        }
     }
 
 
@@ -224,12 +315,54 @@ public class Ao3Controller {
         // --- Configure "Unlisted" ListView (OFFLINE) ---
         if (unlistedListView != null) {
             unlistedListView.setPlaceholder(new Label("No unlisted fics found."));
-            // ... (rest of listeners) ...
+            unlistedListView.setOnDragDetected(event -> {
+                Work selectedWork = unlistedListView.getSelectionModel().getSelectedItem();
+                if (selectedWork != null) {
+                    Dragboard db = unlistedListView.startDragAndDrop(TransferMode.COPY);
+                    ClipboardContent content = new ClipboardContent();
+                    // We'll use the URL (which is the file path) as the unique identifier
+                    content.putString(selectedWork.getUrl());
+                    db.setContent(content);
+                    event.consume();
+                }
+            });
         }
 
         // --- Configure Drag-and-Drop (TARGET) ---
         if (addFicDropTarget != null) {
-            // ... (rest of listeners) ...
+            // 1. Accept the drag event
+            addFicDropTarget.setOnDragOver(event -> {
+                if (event.getGestureSource() != addFicDropTarget && event.getDragboard().hasString()) {
+                    event.acceptTransferModes(TransferMode.COPY);
+                }
+                event.consume();
+            });
+
+            // 2. Handle the drop event
+            addFicDropTarget.setOnDragDropped(event -> {
+                Dragboard db = event.getDragboard();
+                boolean success = false;
+                if (db.hasString()) {
+                    // Get the URL (file path) from the dragboard
+                    String workUrl = db.getString();
+
+                    // Use your helper method to find the matching Work object
+                    Work workToAdd = findWorkInList(workUrl, unlistedListView.getItems());
+
+                    // Add the fic if we found it and it's not already in the list
+                    if (workToAdd != null && !ficsForNewFolder.contains(workToAdd)) {
+                        // Add to our internal data list
+                        ficsForNewFolder.add(workToAdd);
+
+                        // Add just the title to the visual list
+                        newFolderFicsListView.getItems().add(workToAdd.getTitle());
+
+                        success = true;
+                    }
+                }
+                event.setDropCompleted(success);
+                event.consume();
+            });
         }
 
         // --- Initialize Split Pane State ---
@@ -320,6 +453,12 @@ public class Ao3Controller {
     }
 
     private void loadFolders() {
+        // --- ADD THESE TWO LINES ---
+        if (libraryTilePane != null) {
+            libraryTilePane.getChildren().clear();
+        }
+        // --- END OF ADD ---
+
         if (folderSaveFile == null || !Files.exists(folderSaveFile)) {
             System.out.println("No folder save file found. Starting fresh.");
             return;
@@ -388,16 +527,23 @@ public class Ao3Controller {
             folderImageView.setVisible(false);
             folderImageIcon.setVisible(true);
         }
-
-        // Populate the fics list
+        // ✅ --- FIX: Populate fics list from paths ---
         ficsForNewFolder.clear();
-        ficsForNewFolder.addAll(data.fics);
+        newFolderFicsListView.getItems().clear(); // Clear visual list too
 
-        // Update the list of fic titles in the UI
-        List<String> ficTitles = ficsForNewFolder.stream()
-                .map(Work::getTitle)
-                .collect(Collectors.toList());
-        newFolderFicsListView.getItems().setAll(ficTitles);
+        if (data.ficPaths != null) {
+            for (String path : data.ficPaths) {
+                // Use your helper to find the full Work object from the master "Unlisted" list
+                Work work = findWorkInList(path, unlistedListView.getItems());
+                if (work != null) {
+                    ficsForNewFolder.add(work);
+                    newFolderFicsListView.getItems().add(work.getTitle());
+                } else {
+                    // Fic might be missing or not loaded yet
+                    System.err.println("Could not find fic for path: " + path);
+                }
+            }
+        }
     }
 
     @FXML
@@ -457,42 +603,43 @@ public class Ao3Controller {
         // --- THIS IS THE NEW LOGIC ---
         if (currentEditingFolderData != null) {
             // --- MODIFY MODE ---
-            // 1. Update the existing data object
             currentEditingFolderData.name = folderName;
             currentEditingFolderData.description = description;
             currentEditingFolderData.imagePath = newFolderImagePath;
-            currentEditingFolderData.fics.clear();
-            currentEditingFolderData.fics.addAll(ficsForNewFolder);
 
-            // 2. Remove the old tile
+            // ✅ --- FIX: Convert List<Work> to List<String>
+            currentEditingFolderData.ficPaths.clear();
+            currentEditingFolderData.ficPaths.addAll(
+                    ficsForNewFolder.stream()
+                            .map(Work::getUrl) // Get the path (URL)
+                            .collect(Collectors.toList())
+            );
+
             libraryTilePane.getChildren().remove(currentEditingTile);
-
-            // 3. Create a new tile with the updated data and add it
             VBox newFolderTile = createFolderTile(currentEditingFolderData);
             libraryTilePane.getChildren().add(newFolderTile);
 
-            // 4. Reset the editing state
             currentEditingFolderData = null;
             currentEditingTile = null;
 
         } else {
             // --- CREATE NEW MODE (Your old logic) ---
-            // 1. Create the data object
-            FolderData newFolderData = new FolderData(folderName, description, newFolderImagePath, new ArrayList<>(ficsForNewFolder));
 
-            // 2. Create the visual tile
+            // ✅ --- FIX: Convert List<Work> to List<String>
+            List<String> paths = ficsForNewFolder.stream()
+                    .map(Work::getUrl) // Get the path (URL)
+                    .collect(Collectors.toList());
+
+            FolderData newFolderData = new FolderData(folderName, description, newFolderImagePath, paths);
+
             VBox folderTile = createFolderTile(newFolderData);
 
-            // 3. Add the new tile
             if (libraryTilePane != null) {
                 libraryTilePane.getChildren().add(folderTile);
             }
         }
 
-        // --- This part is the same ---
-        // Hide the pane (and clear the form)
         handleAddFicClick();
-
         saveFolders();
     }
 
@@ -551,31 +698,20 @@ public class Ao3Controller {
         isOnlineMode = !isOnlineMode;
         System.out.println("Switch Mode clicked. New state: " + (isOnlineMode ? "Online Search" : "Offline Library"));
 
-        // Toggle "Online Search" pane
+        // Toggle "Online Search" pane (this now controls the searchBox too)
         onlineSearchPane.setVisible(isOnlineMode);
         onlineSearchPane.setManaged(isOnlineMode);
 
-        if (searchBox != null) {
-            searchBox.setVisible(isOnlineMode);
-            searchBox.setManaged(isOnlineMode);
-        }
-
-        // Toggle "Offline Library" pane
+        // Toggle "Offline Library" pane (this now controls libraryControlsBox too)
         offlineSplitPane.setVisible(!isOnlineMode);
         offlineSplitPane.setManaged(!isOnlineMode);
 
-        // This is your *original* offline view. We'll toggle it with the new one.
-        libraryControlsBox.setVisible(!isOnlineMode);
-        libraryControlsBox.setManaged(!isOnlineMode);
-
         if (isOnlineMode) {
             if (modeImageView != null) modeImageView.setImage(offlineModeIcon);
-            // Tooltip.install(modeSwitchButton, new Tooltip("Switch to Offline Library")); // Replaced by mouse event
             if (unlistedListView != null) unlistedListView.getSelectionModel().clearSelection();
         } else {
             if (modeImageView != null) modeImageView.setImage(onlineModeIcon);
-            // Tooltip.install(modeSwitchButton, new Tooltip("Switch to Online Search")); // Replaced by mouse event
-            populateLibraryViews();
+            populateLibraryViews(); // This now correctly reloads your folders
             if (resultsTableView != null) resultsTableView.getSelectionModel().clearSelection();
         }
 
@@ -591,8 +727,12 @@ public class Ao3Controller {
      */
     private void populateLibraryViews() {
         if (unlistedListView == null || libraryTilePane == null) return;
+
+        // This line is now handled by loadFolders(), so we can remove it
+        // libraryTilePane.getChildren().clear();
+
         unlistedListView.getItems().clear();
-        libraryTilePane.getChildren().clear();
+
         if (libraryPath == null) { return; }
 
         List<Work> offlineWorks = new ArrayList<>();
@@ -619,7 +759,9 @@ public class Ao3Controller {
             e.printStackTrace();
             showError("Could not read library directory: " + e.getMessage());
         }
-        System.out.println("Populating library folders... (Not yet implemented)");
+
+        // --- ADD THIS LINE TO RELOAD THE FOLDERS ---
+        loadFolders();
     }
 
 
@@ -736,11 +878,40 @@ public class Ao3Controller {
 
     // --- RESTORED: All story loading methods ---
     private void loadAndShowStory(Work work, List<Work> allWorks) {
-        // ... (existing code) ...
+        // ---
+        Alert loadingAlert = new Alert(Alert.AlertType.INFORMATION);
+        loadingAlert.setTitle("Loading Story");
+        loadingAlert.setHeaderText("Please wait, fetching story content...");
+        loadingAlert.getDialogPane().lookupButton(ButtonType.OK).setVisible(false);
+        loadingAlert.show();
+
+        Task<String> task = createFetchStoryTask(work);
+        task.setOnSucceeded(e -> {
+            loadingAlert.close();
+            // --- CHANGED ---
+            // Pass the allWorks list to the launch method
+            launchReadingWindow(work, task.getValue(), allWorks);
+            // ---
+        });
+        task.setOnFailed(e -> {
+            loadingAlert.close();
+            showError("Failed to load story content.");
+            e.getSource().getException().printStackTrace();
+        });
+        new Thread(task).start();
     }
 
-    private void loadStoryFromLibrary(Work work) {
-        // ... (existing code) ...
+    private void loadStoryFromLibrary(Work work) { // <-- CORRECTED parameter
+        if (work == null) return;
+
+        Path filePath = Paths.get(work.getUrl()); // Get path from 'url' field
+
+        try {
+            String content = Files.readString(filePath, StandardCharsets.UTF_8);
+            launchReadingWindow(work.getTitle(), content, true); // Pass flag for offline
+        } catch (IOException | java.nio.file.InvalidPathException e) {
+            showError("Could not read story file: " + e.getMessage());
+        }
     }
 
     private void launchReadingWindow(Work work, String content, List<Work> allWorks) {
@@ -843,14 +1014,96 @@ public class Ao3Controller {
         }
     }
 
+    private Work findWorkInList(String url, List<Work> list) {
+        if (list == null) return null;
+        for (Work work : list) {
+            // We use getUrl() because that's what we stored (the file path)
+            if (work.getUrl().equals(url)) {
+                return work;
+            }
+        }
+        return null; // Not found
+    }
+
     // --- RESTORED: Web Scraping Tasks ---
     private Task<List<Work>> createFetchWorksTask(String query) {
         return new Task<>() {
             @Override
             protected List<Work> call() throws Exception {
-                // ... (existing code) ...
                 List<Work> worksList = new ArrayList<>();
-                // ... (your full scraping logic) ...
+                String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
+                final String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36";
+                String url = "https://archiveofourown.org/works/search?work_search[query]=" + encodedQuery;
+                System.out.println("DEBUG: Connecting to URL -> " + url);
+
+                try {
+                    Document doc = Jsoup.connect(url)
+                            .userAgent(userAgent)
+                            .referrer("https.www.google.com")
+                            .get();
+                    Elements workElements = doc.select("li.work.blurb");
+                    System.out.println("DEBUG: Connection successful. Found " + workElements.size() + " works on the page.");
+
+
+                    for (Element workEl : workElements) {
+                        Element titleEl = workEl.selectFirst("h4.heading a[href^='/works/']");
+                        Element authorEl = workEl.selectFirst("a[rel=author]"); // This is the <a> tag
+                        Element dateEl = workEl.selectFirst("p.datetime");
+                        Elements tagElements = workEl.select("ul.tags a.tag");
+
+                        if (titleEl != null && dateEl != null) { // authorEl can be null
+                            String title = titleEl.text();
+                            String workUrl = "https://archiveofourown.org" + titleEl.attr("href");
+                            String author;
+                            String authorUrl;
+
+                            if (authorEl != null) {
+                                author = authorEl.text();
+
+                                // ✅ --- THIS IS THE FIX --- ✅
+                                // Check for special accounts *before* saving the URL.
+                                if (author.equals("orphan_account") || author.equals("Anonymous")) {
+                                    authorUrl = null; // Explicitly set to null
+                                } else {
+                                    authorUrl = "https://archiveofourown.org" + authorEl.attr("href");
+                                }
+                                // ✅ --- END OF FIX --- ✅
+
+                            } else {
+                                // Fallback logic for when no <a> tag is found
+                                Element headingEl = workEl.selectFirst("h4.heading");
+                                String headingText = (headingEl != null) ? headingEl.text() : "";
+                                String[] headingParts = headingText.split(" by ");
+                                if (headingParts.length > 1) {
+                                    author = headingParts[1];
+                                } else {
+                                    author = "Anonymous"; // Fallback
+                                }
+                                authorUrl = null;
+                            }
+
+                            String lastUpdated = dateEl.text();
+
+                            List<String> tagsList = tagElements.stream().map(Element::text).collect(Collectors.toList());
+                            String tags = String.join(", ", tagsList);
+
+                            // Pass data to the Work object
+                            Work newWork = new Work(title, author, workUrl, tags, lastUpdated);
+                            newWork.setAuthorUrl(authorUrl); // Set the (now correct) author URL
+                            worksList.add(newWork);
+
+                        }
+                    }
+
+                } catch (Exception e) {
+                    System.err.println("DEBUG: Scraping failed!");
+                    e.printStackTrace();
+                    throw e;
+                }
+
+                if (!worksList.isEmpty()) {
+                    Thread.sleep(300);
+                }
                 return worksList;
             }
         };
@@ -860,8 +1113,13 @@ public class Ao3Controller {
         return new Task<>() {
             @Override
             protected String call() throws Exception {
-                // ... (existing code) ...
-                return "<html><body>...</body></html>"; // Placeholder
+                final String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36";
+                Document doc = Jsoup.connect(work.getUrl() + "?view_full_work=true").userAgent(userAgent).get();
+                Element workskin = doc.selectFirst("#workskin");
+                if (workskin == null) {
+                    return "<html><body>Could not find story content. It might be a restricted work.</body></html>";
+                }
+                return workskin.html(); // Return HTML content
             }
         };
     }
@@ -869,13 +1127,14 @@ public class Ao3Controller {
         String name;
         String description;
         String imagePath;
-        List<Work> fics = new ArrayList<>();
+        List<String> ficPaths = new ArrayList<>();
 
-        FolderData(String name, String description, String imagePath, List<Work> fics) {
+        // This constructor now correctly accepts a List<String>
+        FolderData(String name, String description, String imagePath, List<String> ficPaths) {
             this.name = name;
             this.description = description;
             this.imagePath = imagePath;
-            this.fics.addAll(fics);
+            this.ficPaths.addAll(ficPaths); // And adds the list
         }
     }
     private VBox createFolderTile(FolderData folderData) {
@@ -934,9 +1193,27 @@ public class Ao3Controller {
         folderTile.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
                 System.out.println("Opening folder: " + folderData.name);
+
+                // ✅ --- FIX: Re-create fic list for display ---
+                String ficsText;
+                if (folderData.ficPaths.isEmpty()) {
+                    ficsText = "No fics in this folder.";
+                } else {
+                    List<String> ficTitles = new ArrayList<>();
+                    for (String path : folderData.ficPaths) {
+                        // Find the work in the master list
+                        Work work = findWorkInList(path, unlistedListView.getItems());
+                        if (work != null) {
+                            ficTitles.add(work.getTitle());
+                        } else {
+                            ficTitles.add("[MISSING FIC]");
+                        }
+                    }
+                    ficsText = "Fics: " + String.join(", ", ficTitles);
+                }
+
                 showInfo("Folder Contents (" + folderData.name + ")",
-                        "Description: " + folderData.description + "\n\n" +
-                                "Fics: " + folderData.fics.stream().map(Work::getTitle).collect(Collectors.joining(", ")));
+                        "Description: " + folderData.description + "\n\n" + ficsText);
             }
         });
 
@@ -970,8 +1247,6 @@ public class Ao3Controller {
 
         if (result.isPresent() && result.get() == ButtonType.OK) {
             libraryTilePane.getChildren().remove(folderTile);
-            // Here you would also add logic to delete the folder's data file from disk
-
             saveFolders();
         }
     }
