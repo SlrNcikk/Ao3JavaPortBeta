@@ -33,7 +33,6 @@
 
                         <ImageView fitHeight="53.0" fitWidth="137.0" onMouseClicked="#openSpotify" pickOnBounds="true" preserveRatio="true" styleClass="clickable-image" style="-fx-cursor: hand;"><image><Image url="@spot.png" /></image></ImageView>
                         <VBox />
-                        <Button onAction="#handleLaunchChat" text="Launch P2P Chat" style="-fx-cursor: hand;" />
 
                         <Button fx:id="settingsButton" mnemonicParsing="false" onAction="#onSettingsButtonClick" style="-fx-background-color: transparent; -fx-padding: 1; -fx-cursor: hand;"
                                 onMouseEntered="#onSettingsEnter" onMouseExited="#onMouseExit">
@@ -188,7 +187,7 @@
                                     </children>
                                 </HBox>
 
-                                <Label text="Add Fic" style="-fx-font-size: 16;" />
+                                <Label text="Add Stories" style="-fx-font-size: 16;" />
                                 <VBox fx:id="addFicDropTarget" alignment="CENTER" style="-fx-border-color: #AAAAAA; -fx-border-style: dashed; -fx-background-color: #FAFAFA;" VBox.vgrow="ALWAYS">
                                     <children>
                                         <Label text="Drag Fics Here from 'Unlisted'" />

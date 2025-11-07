@@ -292,11 +292,28 @@ public class SpotifyService {
 
     // ----------------- Current Track -----------------
     public static JsonObject getCurrentTrackJson() throws IOException, InterruptedException {
+        // We still call ensureDevice() to make sure we've found a device,
+        // even if we don't pass it in this specific URL.
         ensureDevice();
-        String url = BASE_URL + "/v1/me/player/currently-playing?device_id=" + deviceId;
+
+        // ✅ --- FIX: This is the correct URL. ---
+        String url = BASE_URL + "/v1/me/player/currently-playing";
+
         HttpRequest request = authRequest(url).GET().build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) return null;
+
+        // ✅ --- FIX: Explicitly handle 204 (No Content) ---
+        if (response.statusCode() == 204) {
+            // This is a success, but means nothing is playing.
+            return null;
+        }
+
+        if (response.statusCode() != 200) {
+            // This is a real error.
+            throw new IOException("Failed to get current track: " + response.body());
+        }
+
+        // We have a 200 OK, so parse the response.
         return JsonParser.parseString(response.body()).getAsJsonObject();
     }
 }

@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static JavaBeta.SpotifyService.*;
+
 public class SpotifyController {
     private Map<String, String> currentSearchResults = new HashMap<>();
 
@@ -66,7 +68,7 @@ public class SpotifyController {
 
                     new Thread(() -> {
                         try {
-                            SpotifyService.playTrack(uri);
+                            playTrack(uri);
                         } catch (Exception ex) {
                             ex.printStackTrace();
                             Platform.runLater(() -> songTitle.setText("Failed to play: " + selected));
@@ -128,7 +130,7 @@ public class SpotifyController {
                     String spotifyUri = "spotify:" + type + ":" + id;
 
                     // 5. Play it!
-                    SpotifyService.playTrack(spotifyUri);
+                    playTrack(spotifyUri);
 
                     // 6. (Optional) Clear the search list and field
                     Platform.runLater(() -> {
@@ -147,7 +149,7 @@ public class SpotifyController {
             new Thread(() -> {
                 try {
                     // This is your original search logic
-                    Map<String, String> results = SpotifyService.searchAll(query, 10);
+                    Map<String, String> results = searchAll(query, 10);
 
                     // Save the results to our class variable
                     this.currentSearchResults = results;
@@ -169,7 +171,7 @@ public class SpotifyController {
     private void onLogin() {
         System.out.println("Login clicked");
         // Start authentication in a new thread
-        executePlayerAction(() -> SpotifyService.authenticate());
+        executePlayerAction(() -> authenticate());
     }
 
     @FXML
@@ -197,66 +199,92 @@ public class SpotifyController {
     }
 
 
-    @FXML private void onPlay() { executePlayerAction(() -> SpotifyService.play()); }
-    @FXML private void onPause() { executePlayerAction(() -> SpotifyService.pause()); }
-    @FXML private void onNext() { executePlayerAction(() -> SpotifyService.nextTrack()); }
-    @FXML private void onPrevious() { executePlayerAction(() -> SpotifyService.previousTrack()); }
+    @FXML private void onPlay() { executePlayerAction(() -> play()); }
+    @FXML private void onPause() { executePlayerAction(() -> pause()); }
+    @FXML private void onNext() { executePlayerAction(() -> nextTrack()); }
+    @FXML private void onPrevious() { executePlayerAction(() -> previousTrack()); }
 
     private void refreshTrackInfo() {
         new Thread(() -> {
             try {
-                JsonObject trackJson = SpotifyService.getCurrentTrackJson();
+                JsonObject trackJson = getCurrentTrackJson();
 
                 if (trackJson == null) {
-                    // --- A: NOTHING IS PLAYING ---
+                    // --- A: NOTHING IS PLAYING (204 No Content) ---
                     Platform.runLater(() -> {
                         songTitle.setText("Nothing Playing");
                         artistName.setText("-");
 
-                        // Clear the album cover (if it's not already clear)
                         if (currentAlbumCoverUrl != null) {
                             currentAlbumCoverUrl = null;
-                            albumCover.setImage(null); // Set to null or a placeholder
+                            albumCover.setImage(null);
                         }
                     });
                     return; // Stop the thread
                 }
 
+                // ✅ --- THIS IS THE FIX --- ✅
+                // Check if 'item' is null (e.g., an Ad is playing)
+                if (!trackJson.has("item") || trackJson.get("item").isJsonNull()) {
+                    Platform.runLater(() -> {
+                        songTitle.setText("Playback Paused (or Ad)");
+                        artistName.setText("-");
+                        currentAlbumCoverUrl = null;
+                        albumCover.setImage(null);
+                    });
+                    return; // Stop the thread
+                }
+                // --- END OF FIX ---
+
                 // --- B: SOMETHING IS PLAYING ---
-                // (Your code to get info from trackJson goes here)
-                // Example:
-                String trackName = trackJson.get("item").getAsJsonObject().get("name").getAsString();
-                String artist = trackJson.get("item").getAsJsonObject().get("artists").getAsJsonArray().get(0).getAsJsonObject().get("name").getAsString();
-                String newAlbumCoverUrl = trackJson.get("item").getAsJsonObject().get("album").getAsJsonObject().get("images").getAsJsonArray().get(0).getAsJsonObject().get("url").getAsString();
+                // Now it's safe to get the item
+                JsonObject item = trackJson.getAsJsonObject("item");
+
+                String trackName = item.get("name").getAsString();
+                String artist = item.get("artists").getAsJsonArray().get(0).getAsJsonObject().get("name").getAsString();
+                String newAlbumCoverUrl = item.get("album").getAsJsonObject().get("images").getAsJsonArray().get(0).getAsJsonObject().get("url").getAsString();
 
                 // Now update the UI
                 Platform.runLater(() -> {
                     songTitle.setText(trackName);
                     artistName.setText(artist);
 
-                    // --- THIS IS THE CORRECT PLACE FOR THE FIX ---
-                    // Only update the image if the URL is new
                     if (!newAlbumCoverUrl.equals(currentAlbumCoverUrl)) {
-                        currentAlbumCoverUrl = newAlbumCoverUrl; // 1. Save the new URL
-                        albumCover.setImage(new Image(currentAlbumCoverUrl)); // 2. Set the image
+                        currentAlbumCoverUrl = newAlbumCoverUrl;
+                        albumCover.setImage(new Image(currentAlbumCoverUrl));
                     }
-                    // --- END OF FIX ---
                 });
 
             } catch (Exception e) {
+                Platform.runLater(() -> {
+                    songTitle.setText("Error on refresh");
+                    artistName.setText(e.getMessage());
+                });
                 e.printStackTrace();
             }
-        }).start(); // Don't forget to start the thread!
+        }).start();
     }
 
     private void executePlayerAction(PlayerAction action) {
         new Thread(() -> {
             try {
-                action.run();
+                action.run(); // Try to run the command (play, pause, etc.)
+            } catch (Exception e) {
+                String msg = e.getMessage();
+
+                // Check if this is the harmless "spam-click" error
+                if (msg != null && msg.contains("Restriction violated")) {
+                    // Benign error, just log it. We don't need to show it to the user.
+                    System.out.println("Ignoring benign 403 error (e.g., play while playing).");
+                } else {
+                    // This is a REAL error (like "No device found")
+                    e.printStackTrace();
+                    Platform.runLater(() -> songTitle.setText("Error: " + e.getMessage()));
+                }
+            } finally {
+                // ALWAYS refresh the UI after any command, whether it
+                // succeeded or failed, to show the true current state.
                 refreshTrackInfo();
-            } catch (Exception e) { // <-- FIX
-                e.printStackTrace();
-                Platform.runLater(() -> songTitle.setText("Error: " + e.getMessage()));
             }
         }).start();
     }
