@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane prefHeight="500.0" prefWidth="700.0" style="-fx-padding: 20;" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="JavaBeta.FolderViewController">
+    <top>
+        <HBox alignment="CENTER_LEFT" spacing="20.0" BorderPane.alignment="CENTER">
+            <children>
+                <ImageView fx:id="folderImageView" fitHeight="180.0" fitWidth="180.0" pickOnBounds="true" preserveRatio="true" />
+
+                <VBox spacing="5.0" HBox.hgrow="ALWAYS"> <children>
+                    <Label text="Folder" style="-fx-font-weight: bold; -fx-font-size: 14;" />
+                    <Label fx:id="folderNameLabel" text="Folder Title" style="-fx-font-weight: bold; -fx-font-size: 48;">
+                        <font>
+                            <Font name="System Bold" size="48.0" />
+                        </font>
+                        <VBox.margin>
+                            <Insets top="5.0" /> </VBox.margin>
+                        <VBox.vgrow>ALWAYS</VBox.vgrow> </Label>
+                    <Label fx:id="folderDescriptionLabel" text="Description..." wrapText="true" />
+                </children>
+                </VBox>
+            </children>
+            <BorderPane.margin>
+                <Insets bottom="20.0" />
+            </BorderPane.margin>
+        </HBox>
+    </top>
+
+    <center>
+        <TableView fx:id="ficsTableView" BorderPane.alignment="CENTER">
+            <columns>
+                <TableColumn fx:id="titleColumn" prefWidth="300.0" text="Title" />
+                <TableColumn fx:id="authorColumn" prefWidth="200.0" text="Author" />
+            </columns>
+            <columnResizePolicy>
+                <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+            </columnResizePolicy>
+        </TableView>
+    </center>
+</BorderPane>

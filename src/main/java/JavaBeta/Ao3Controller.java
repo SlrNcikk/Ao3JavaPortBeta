@@ -901,9 +901,8 @@ public class Ao3Controller {
         new Thread(task).start();
     }
 
-    private void loadStoryFromLibrary(Work work) { // <-- CORRECTED parameter
+    public void loadStoryFromLibrary(Work work) {
         if (work == null) return;
-
         Path filePath = Paths.get(work.getUrl()); // Get path from 'url' field
 
         try {
@@ -1123,7 +1122,7 @@ public class Ao3Controller {
             }
         };
     }
-    private static class FolderData {
+    public static class FolderData {
         String name;
         String description;
         String imagePath;
@@ -1174,11 +1173,11 @@ public class Ao3Controller {
             } catch (Exception e) {
                 // 5. If it FAILS, add the placeholder icon INSTEAD
                 System.err.println("Could not load tile image: " + e.getMessage());
-                folderTile.getChildren().add(createFolderPlaceholderIcon());
+                folderTile.getChildren().add(createFolderPlaceholderIcon()); // This was one error
             }
         } else {
             // 6. If NO IMAGE PATH, add the placeholder icon
-            folderTile.getChildren().add(createFolderPlaceholderIcon());
+            folderTile.getChildren().add(createFolderPlaceholderIcon()); // This was the other error
         }
         // --- End of Corrected Logic ---
 
@@ -1192,28 +1191,41 @@ public class Ao3Controller {
         // --- Add double-click event (to open) ---
         folderTile.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
-                System.out.println("Opening folder: " + folderData.name);
+                try {
+                    // 1. Load the FXML
+                    FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/FolderView.fxml"));
+                    Parent root = loader.load();
 
-                // ✅ --- FIX: Re-create fic list for display ---
-                String ficsText;
-                if (folderData.ficPaths.isEmpty()) {
-                    ficsText = "No fics in this folder.";
-                } else {
-                    List<String> ficTitles = new ArrayList<>();
-                    for (String path : folderData.ficPaths) {
-                        // Find the work in the master list
-                        Work work = findWorkInList(path, unlistedListView.getItems());
-                        if (work != null) {
-                            ficTitles.add(work.getTitle());
-                        } else {
-                            ficTitles.add("[MISSING FIC]");
-                        }
+                    // 2. Get the new controller
+                    FolderViewController controller = loader.getController();
+
+                    // 3. Pass it the data and a reference to this main controller
+                    controller.setMainController(this); // 'this' is the Ao3Controller
+                    controller.loadFolder(folderData);
+
+                    // 4. Create the new scene
+                    Scene newScene = new Scene(root); // We create the scene first
+
+                    // ✅ --- NEW, BETTER THEME LOGIC ---
+                    // This copies all active stylesheets (light or dark) from the main window
+                    if (themeButton != null && themeButton.getScene() != null) {
+                        newScene.getStylesheets().addAll(themeButton.getScene().getStylesheets());
                     }
-                    ficsText = "Fics: " + String.join(", ", ficTitles);
-                }
+                    // ✅ --- END OF NEW LOGIC ---
 
-                showInfo("Folder Contents (" + folderData.name + ")",
-                        "Description: " + folderData.description + "\n\n" + ficsText);
+                    // 5. Create and show the new window (Stage)
+                    Stage folderStage = new Stage();
+                    folderStage.setTitle(folderData.name);
+
+                    folderStage.setScene(newScene); // Set the new, themed scene
+
+                    folderStage.initModality(Modality.NONE);
+                    folderStage.show();
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    showError("Could not open folder view: " + e.getMessage());
+                }
             }
         });
 
@@ -1232,11 +1244,11 @@ public class Ao3Controller {
             event.consume();
         });
 
-        return folderTile;
+        return folderTile; // This is the line that fixes the "Incompatible types" error
     }
 
     /**
-     * ✅ --- NEW: Handles deleting the folder tile ---
+     * Handles deleting the folder tile
      */
     private void handleDeleteFolder(VBox folderTile) {
         Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
@@ -1251,9 +1263,6 @@ public class Ao3Controller {
         }
     }
 
-    /**
-     * Helper to create a standard placeholder icon for folders.
-     */
     private FontIcon createFolderPlaceholderIcon() {
         FontIcon placeholderIcon = new FontIcon("fa-folder");
         placeholderIcon.setIconSize(60);
