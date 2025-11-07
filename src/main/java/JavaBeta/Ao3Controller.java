@@ -81,12 +81,8 @@ public class Ao3Controller {
     @FXML private ImageView modeImageView;
     @FXML private ProgressIndicator loadingIndicator;
     @FXML private Label timeLabel;
+    @FXML private ListView<Work> resultsListView;
     @FXML private VBox searchBox;
-    @FXML private TableView<Work> resultsTableView;
-    @FXML private TableColumn<Work, String> titleColumn;
-    @FXML private TableColumn<Work, String> authorColumn;
-    @FXML private TableColumn<Work, String> tagsColumn;
-    @FXML private TableColumn<Work, String> updatedColumn;
     @FXML private TableView<Work> libraryTableView;
     @FXML private TableColumn<Work, String> libraryTitleColumn;
     @FXML private TableColumn<Work, String> libraryAuthorColumn;
@@ -193,7 +189,7 @@ public class Ao3Controller {
         }
     }
 
-    private void openAuthorProfile(Work work) {
+    public void openAuthorProfile(Work work) {
         if (work == null) {
             return; // Safety check
         }
@@ -265,39 +261,20 @@ public class Ao3Controller {
             e.printStackTrace();
         }
 
-        // --- Configure "Online Search" TableView (RESTORED) ---
-        if (titleColumn != null) { titleColumn.setCellValueFactory(new PropertyValueFactory<>("title")); }
-        if (authorColumn != null) {
-            authorColumn.setCellValueFactory(new PropertyValueFactory<>("author"));
-            authorColumn.setCellFactory(col -> new TableCell<Work, String>() {
-                private final Hyperlink link = new Hyperlink();
-                @Override
-                protected void updateItem(String item, boolean empty) {
-                    super.updateItem(item, empty);
-                    if (empty || item == null) { setGraphic(null); }
-                    else {
-                        link.setText(item);
-                        link.setOnAction(e -> openAuthorProfile(getTableView().getItems().get(getIndex())));
-                        setGraphic(link);
-                    }
-                }
-            });
-        }
-        if (tagsColumn != null) { tagsColumn.setCellValueFactory(new PropertyValueFactory<>("tags")); }
-        if (updatedColumn != null) { updatedColumn.setCellValueFactory(new PropertyValueFactory<>("lastUpdated")); }
+        // --- ✅ NEW: Configure "Online Search" ListView ---
+        if (resultsListView != null) {
+            // This tells the ListView to use your new controller class
+            // for every cell.
+            resultsListView.setCellFactory(listView -> new WorkCellController(this));
 
-        if (resultsTableView != null) {
-            resultsTableView.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2) {
-                    Work selected = resultsTableView.getSelectionModel().getSelectedItem();
-                    if (selected != null) {
-                        loadAndShowStory(selected, resultsTableView.getItems());
-                    }
-                }
-            });
+            // Add a placeholder label
+            resultsListView.setPlaceholder(new Label("No search results."));
         }
+        // --- ✅ OLD TABLEVIEW CODE REMOVED ---
+
 
         // --- Configure "Offline Library" TableView (RESTORED) ---
+        // (This is for your *other* TableView, which is fine)
         if (libraryTitleColumn != null) { libraryTitleColumn.setCellValueFactory(new PropertyValueFactory<>("title")); }
         if (libraryAuthorColumn != null) { libraryAuthorColumn.setCellValueFactory(new PropertyValueFactory<>("author")); }
         if (libraryTagsColumn != null) { libraryTagsColumn.setCellValueFactory(new PropertyValueFactory<>("tags")); }
@@ -712,7 +689,7 @@ public class Ao3Controller {
         } else {
             if (modeImageView != null) modeImageView.setImage(onlineModeIcon);
             populateLibraryViews(); // This now correctly reloads your folders
-            if (resultsTableView != null) resultsTableView.getSelectionModel().clearSelection();
+            if (resultsListView != null) resultsListView.getSelectionModel().clearSelection();
         }
 
         if (createPane != null && createPane.isVisible()) {
@@ -838,10 +815,10 @@ public class Ao3Controller {
         loadingIndicator.setVisible(true);
         searchButton.setDisable(true);
         clearButton.setDisable(true);
-        resultsTableView.getItems().clear();
+        resultsListView.getItems().clear();
         Task<List<Work>> fetchWorksTask = createFetchWorksTask(query);
         fetchWorksTask.setOnSucceeded(e -> {
-            resultsTableView.getItems().setAll(fetchWorksTask.getValue());
+            resultsListView.getItems().setAll(fetchWorksTask.getValue());
             loadingIndicator.setVisible(false);
             searchButton.setDisable(false);
             clearButton.setDisable(false);
@@ -862,7 +839,7 @@ public class Ao3Controller {
         authorField.clear();
         tagsField.clear();
         if (isOnlineMode) {
-            resultsTableView.getItems().clear();
+            resultsListView.getItems().clear();
         }
     }
 
@@ -1039,6 +1016,7 @@ public class Ao3Controller {
                     Document doc = Jsoup.connect(url)
                             .userAgent(userAgent)
                             .referrer("https.www.google.com")
+                            .timeout(10000) // 10-second timeout
                             .get();
                     Elements workElements = doc.select("li.work.blurb");
                     System.out.println("DEBUG: Connection successful. Found " + workElements.size() + " works on the page.");
@@ -1046,11 +1024,17 @@ public class Ao3Controller {
 
                     for (Element workEl : workElements) {
                         Element titleEl = workEl.selectFirst("h4.heading a[href^='/works/']");
-                        Element authorEl = workEl.selectFirst("a[rel=author]"); // This is the <a> tag
+                        Element authorEl = workEl.selectFirst("a[rel=author]");
                         Element dateEl = workEl.selectFirst("p.datetime");
-                        Elements tagElements = workEl.select("ul.tags a.tag");
 
-                        if (titleEl != null && dateEl != null) { // authorEl can be null
+                        // ✅ --- NEW SCRAPING LOGIC ---
+                        Element fandomEl = workEl.selectFirst("h5.fandoms a");
+                        Elements relationshipEls = workEl.select("li.relationships a");
+                        Elements characterEls = workEl.select("li.characters a");
+                        Elements tagElements = workEl.select("li.freeforms a.tag"); // This is the "freeform" tags
+                        // --- END NEW LOGIC ---
+
+                        if (titleEl != null && dateEl != null) {
                             String title = titleEl.text();
                             String workUrl = "https://archiveofourown.org" + titleEl.attr("href");
                             String author;
@@ -1058,39 +1042,71 @@ public class Ao3Controller {
 
                             if (authorEl != null) {
                                 author = authorEl.text();
-
-                                // ✅ --- THIS IS THE FIX --- ✅
-                                // Check for special accounts *before* saving the URL.
                                 if (author.equals("orphan_account") || author.equals("Anonymous")) {
-                                    authorUrl = null; // Explicitly set to null
+                                    authorUrl = null;
                                 } else {
                                     authorUrl = "https://archiveofourown.org" + authorEl.attr("href");
                                 }
-                                // ✅ --- END OF FIX --- ✅
-
                             } else {
-                                // Fallback logic for when no <a> tag is found
                                 Element headingEl = workEl.selectFirst("h4.heading");
                                 String headingText = (headingEl != null) ? headingEl.text() : "";
                                 String[] headingParts = headingText.split(" by ");
                                 if (headingParts.length > 1) {
                                     author = headingParts[1];
                                 } else {
-                                    author = "Anonymous"; // Fallback
+                                    author = "Anonymous";
                                 }
                                 authorUrl = null;
                             }
 
                             String lastUpdated = dateEl.text();
 
-                            List<String> tagsList = tagElements.stream().map(Element::text).collect(Collectors.toList());
-                            String tags = String.join(", ", tagsList);
+                            // --- NEW: Scrape Fandom, Relationships, Characters, and Freeforms ---
+                            String fandom = (fandomEl != null) ? fandomEl.text() : "N/A";
 
-                            // Pass data to the Work object
-                            Work newWork = new Work(title, author, workUrl, tags, lastUpdated);
-                            newWork.setAuthorUrl(authorUrl); // Set the (now correct) author URL
+                            String relationships = relationshipEls.stream()
+                                    .map(Element::text)
+                                    .collect(Collectors.joining(", "));
+
+                            String characters = characterEls.stream()
+                                    .map(Element::text)
+                                    .collect(Collectors.joining(", "));
+
+                            String tags = tagElements.stream()
+                                    .map(Element::text)
+                                    .collect(Collectors.joining(", "));
+                            // ---
+
+                            // Scrape Header Icons
+                            String rating = "Not Rated";
+                            String category = "No Category";
+                            String warnings = "No Warnings";
+                            String completionStatus = "In Progress";
+
+                            Elements requiredTags = workEl.select("ul.required-tags span.tag-h");
+
+                            for (Element tagSpan : requiredTags) {
+                                String titleAttr = tagSpan.attr("title");
+
+                                if (titleAttr.startsWith("Rating:")) {
+                                    rating = titleAttr.substring("Rating: ".length());
+                                } else if (titleAttr.startsWith("Category:")) {
+                                    category = titleAttr.substring("Category: ".length());
+                                } else if (titleAttr.startsWith("Warnings:")) {
+                                    warnings = titleAttr.substring("Warnings: ".length());
+                                } else if (titleAttr.startsWith("Completion Status:")) {
+                                    completionStatus = titleAttr.substring("Completion Status: ".length());
+                                }
+                            }
+
+                            // ✅ --- THIS IS THE FIX ---
+                            // This now correctly calls the 12-argument constructor
+                            Work newWork = new Work(title, author, workUrl, tags, lastUpdated,
+                                    rating, category, warnings, completionStatus,
+                                    fandom, relationships, characters);
+
+                            newWork.setAuthorUrl(authorUrl); // Set the author URL
                             worksList.add(newWork);
-
                         }
                     }
 

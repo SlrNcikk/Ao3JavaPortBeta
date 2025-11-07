@@ -94,16 +94,8 @@
                     <center>
                         <StackPane VBox.vgrow="ALWAYS">
                             <children>
-                                <TableView fx:id="resultsTableView" visible="true">
-                                    <columns>
-                                        <TableColumn fx:id="titleColumn" minWidth="150.0" prefWidth="250.0" text="Title" />
-                                        <TableColumn fx:id="authorColumn" minWidth="100.0" prefWidth="150.0" text="Author" />
-                                        <TableColumn fx:id="tagsColumn" minWidth="100.0" prefWidth="150.0" text="Tags" />
-                                        <TableColumn fx:id="updatedColumn" minWidth="100.0" prefWidth="150.0" text="Last Updated" />
-                                    </columns>
-                                    <columnResizePolicy><TableView fx:constant="CONSTRAINED_RESIZE_POLICY" /></columnResizePolicy>
-                                </TableView>
-                                <ProgressIndicator fx:id="loadingIndicator" maxHeight="50.0" maxWidth="50.0" visible="false" StackPane.alignment="CENTER" />
+                                <ListView fx:id="resultsListView" />
+                                <ProgressIndicator fx:id="loadingIndicator"/>
                             </children>
                         </StackPane>
                     </center>
