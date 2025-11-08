@@ -2,13 +2,12 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.TableColumn?>
-<?import javafx.scene.control.TableView?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Font?>
+<?import javafx.scene.control.ListView?>
 
 <BorderPane prefHeight="500.0" prefWidth="700.0" style="-fx-padding: 20;" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="JavaBeta.FolderViewController">
     <top>
@@ -36,14 +35,6 @@
     </top>
 
     <center>
-        <TableView fx:id="ficsTableView" BorderPane.alignment="CENTER">
-            <columns>
-                <TableColumn fx:id="titleColumn" prefWidth="300.0" text="Title" />
-                <TableColumn fx:id="authorColumn" prefWidth="200.0" text="Author" />
-            </columns>
-            <columnResizePolicy>
-                <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
-            </columnResizePolicy>
-        </TableView>
+        <ListView fx:id="worksListView" BorderPane.alignment="CENTER" />
     </center>
 </BorderPane>

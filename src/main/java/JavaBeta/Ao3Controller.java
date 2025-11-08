@@ -3,6 +3,8 @@ package JavaBeta;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
+import java.util.List;
+import java.util.ArrayList;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
@@ -121,7 +123,7 @@ public class Ao3Controller {
     @FXML private TextField folderNameField;
     @FXML private TextArea folderDescriptionArea;
     @FXML private VBox addFicDropTarget;
-    @FXML private ListView<String> newFolderFicsListView;
+    @FXML private ListView<Work> newFolderFicsListView;
     @FXML private Button createFolderButton;
 
     // ✅ --- NEW: Label for the tooltip alternative ---
@@ -315,6 +317,11 @@ public class Ao3Controller {
             });
         }
 
+        if (newFolderFicsListView != null) {
+            newFolderFicsListView.setCellFactory(listView -> new WorkCellController(this));
+        }
+
+
         // --- Configure Drag-and-Drop (TARGET) ---
         if (addFicDropTarget != null) {
             // 1. Accept the drag event
@@ -335,6 +342,7 @@ public class Ao3Controller {
 
                     // Use your helper method to find the matching Work object
                     Work workToAdd = findWorkInList(workUrl, unlistedListView.getItems());
+                    List<Work> ficsForFolder = new ArrayList<>();
 
                     // Add the fic if we found it and it's not already in the list
                     if (workToAdd != null && !ficsForNewFolder.contains(workToAdd)) {
@@ -342,7 +350,7 @@ public class Ao3Controller {
                         ficsForNewFolder.add(workToAdd);
 
                         // Add just the title to the visual list
-                        newFolderFicsListView.getItems().add(workToAdd.getTitle());
+                        newFolderFicsListView.getItems().add(workToAdd);
 
                         success = true;
                     }
@@ -524,7 +532,7 @@ public class Ao3Controller {
                 Work work = findWorkInList(path, unlistedListView.getItems());
                 if (work != null) {
                     ficsForNewFolder.add(work);
-                    newFolderFicsListView.getItems().add(work.getTitle());
+                    newFolderFicsListView.getItems().add(work);
                 } else {
                     // Fic might be missing or not loaded yet
                     System.err.println("Could not find fic for path: " + path);
@@ -1233,20 +1241,17 @@ public class Ao3Controller {
 
         folderTile.setUserData(folderData);
 
-        // --- CORRECTED Add Image Logic ---
+        // --- Add Image Logic ---
         if (folderData.imagePath != null && !folderData.imagePath.isBlank()) {
             try {
-                // 1. Create the ImageView
                 ImageView tileImageView = new ImageView();
                 tileImageView.setFitHeight(80);
                 tileImageView.setFitWidth(80);
                 tileImageView.setPreserveRatio(true);
-
-                // 2. Load and set the image
                 Image tileImage = new Image(folderData.imagePath);
                 tileImageView.setImage(tileImage);
 
-                // 3. Apply the square auto-crop viewport
+                // Apply the square auto-crop viewport
                 double width = tileImage.getWidth();
                 double height = tileImage.getHeight();
                 if (width != height) {
@@ -1255,21 +1260,14 @@ public class Ao3Controller {
                     double y = (height - size) / 2;
                     tileImageView.setViewport(new Rectangle2D(x, y, size, size));
                 }
-
-                // 4. Add the SUCCESSFUL ImageView to the tile
                 folderTile.getChildren().add(tileImageView);
-
             } catch (Exception e) {
-                // 5. If it FAILS, add the placeholder icon INSTEAD
                 System.err.println("Could not load tile image: " + e.getMessage());
-                folderTile.getChildren().add(createFolderPlaceholderIcon()); // This was one error
+                folderTile.getChildren().add(createFolderPlaceholderIcon());
             }
         } else {
-            // 6. If NO IMAGE PATH, add the placeholder icon
-            folderTile.getChildren().add(createFolderPlaceholderIcon()); // This was the other error
+            folderTile.getChildren().add(createFolderPlaceholderIcon());
         }
-        // --- End of Corrected Logic ---
-
 
         // --- Add Name ---
         Label nameLabel = new Label(folderData.name);
@@ -1284,30 +1282,41 @@ public class Ao3Controller {
                     // 1. Load the FXML
                     FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/FolderView.fxml"));
                     Parent root = loader.load();
-
-                    // 2. Get the new controller
                     FolderViewController controller = loader.getController();
 
-                    // 3. Pass it the data and a reference to this main controller
-                    controller.setMainController(this); // 'this' is the Ao3Controller
-                    controller.loadFolder(folderData);
+                    // 2. Set the main controller
+                    controller.setMainController(this);
 
-                    // 4. Create the new scene
-                    Scene newScene = new Scene(root); // We create the scene first
+                    // 3. Find all the full Work objects for this folder
+                    List<Work> ficsForFolder = new ArrayList<>();
+                    List<Work> allOfflineWorks = unlistedListView.getItems(); // Get master list
 
-                    // ✅ --- NEW, BETTER THEME LOGIC ---
-                    // This copies all active stylesheets (light or dark) from the main window
+                    if (folderData.ficPaths != null) {
+                        for (String pathString : folderData.ficPaths) {
+                            Work fic = findWorkInList(pathString, allOfflineWorks); // Use your helper
+                            if (fic != null) {
+                                ficsForFolder.add(fic);
+                            } else {
+                                System.err.println("Could not find loaded fic for path: " + pathString);
+                            }
+                        }
+                    }
+
+                    // 4. Load the data into the folder controller
+                    controller.loadFolder(folderData, ficsForFolder);
+
+                    // 5. Create the new scene
+                    Scene newScene = new Scene(root);
+
+                    // 6. Copy themes
                     if (themeButton != null && themeButton.getScene() != null) {
                         newScene.getStylesheets().addAll(themeButton.getScene().getStylesheets());
                     }
-                    // ✅ --- END OF NEW LOGIC ---
 
-                    // 5. Create and show the new window (Stage)
+                    // 7. Create and show the new window (Stage)
                     Stage folderStage = new Stage();
                     folderStage.setTitle(folderData.name);
-
-                    folderStage.setScene(newScene); // Set the new, themed scene
-
+                    folderStage.setScene(newScene);
                     folderStage.initModality(Modality.NONE);
                     folderStage.show();
 
@@ -1333,7 +1342,7 @@ public class Ao3Controller {
             event.consume();
         });
 
-        return folderTile; // This is the line that fixes the "Incompatible types" error
+        return folderTile;
     }
 
     /**
