@@ -9,8 +9,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.web.WebView;
 import javafx.stage.Modality;
+import com.google.gson.Gson;
 import javafx.stage.Stage;
 
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -63,6 +65,7 @@ public class ReadingController {
     private String storyAuthor;
     private String rawHtmlContent;
     private boolean isOfflineStory = false;
+    private final Gson gson = new Gson();
 
     @FXML
     public void initialize() {
@@ -160,20 +163,60 @@ public class ReadingController {
 
     @FXML
     protected void onDownloadButtonClick() {
-        if (isOfflineStory || storyTitle == null || storyAuthor == null || rawHtmlContent == null || rawHtmlContent.isEmpty()) {
-            showError("Cannot download this story (it might be offline or not fully loaded).");
+        // 1. Check if we have the metadata (currentWork)
+        if (isOfflineStory || currentWork == null || rawHtmlContent == null || rawHtmlContent.isEmpty()) {
+            showError("Cannot download this story (it might be offline, or metadata is missing).");
             return;
         }
+
         Path libraryPath = getLibraryPath();
-        if (libraryPath == null) return;
-        String safeTitle = storyTitle.replaceAll("[\\\\/:*?\"<>|]", "_");
-        String fileName = safeTitle + " - " + storyAuthor + ".html";
-        Path filePath = libraryPath.resolve(fileName);
+        if (libraryPath == null) {
+            showError("Could not find library path.");
+            return;
+        }
+
+        // 2. Create a base filename (no extension)
+        // We use currentWork for accuracy, not storyTitle/storyAuthor
+        String safeTitle = currentWork.getTitle().replaceAll("[\\\\/:*?\"<>|]", "_");
+        String safeAuthor = currentWork.getAuthor().replaceAll("[\\\\/:*?\"<>|]", "_");
+        String baseFileName = safeTitle + " - " + safeAuthor;
+
+        // 3. Define paths for BOTH files
+        Path htmlFilePath = libraryPath.resolve(baseFileName + ".html");
+        Path metaFilePath = libraryPath.resolve(baseFileName + ".json");
+
         try {
-            Files.writeString(filePath, rawHtmlContent, StandardCharsets.UTF_8);
-            showInfo("Download Complete!", "Saved '" + fileName + "' as HTML to your offline library.");
+            // 4. Save the HTML file (your existing logic)
+            Files.writeString(htmlFilePath, rawHtmlContent, StandardCharsets.UTF_8);
+
+            // 5. Create a new 'Work' object that points to the LOCAL HTML file
+            Work offlineCopy = new Work(
+                    currentWork.getTitle(),
+                    currentWork.getAuthor(),
+                    htmlFilePath.toFile().getAbsolutePath(), // Use the local .html file path
+                    currentWork.getTags(),
+                    currentWork.getLastUpdated(),
+                    currentWork.getRating(),
+                    currentWork.getCategory(),
+                    currentWork.getWarnings(),
+                    currentWork.getCompletionStatus(),
+                    currentWork.getFandom(),
+                    currentWork.getRelationships(),
+                    currentWork.getCharacters()
+            );
+            offlineCopy.setAuthorUrl(currentWork.getAuthorUrl());
+
+            // 6. Save the metadata as a .json file
+            try (FileWriter writer = new FileWriter(metaFilePath.toFile())) {
+                gson.toJson(offlineCopy, writer);
+            }
+
+            // 7. Show one success message for both
+            showInfo("Download Complete!", "Saved story and metadata for '" + baseFileName + "' to your offline library.");
+
         } catch (IOException e) {
-            showError("Could not save file: " + e.getMessage());
+            showError("Could not save files: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

@@ -26,6 +26,9 @@ import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import javafx.util.Duration;
 import org.openqa.selenium.support.ui.WebDriverWait;
+import com.google.gson.reflect.TypeToken;
+import java.io.FileReader;
+import java.lang.reflect.Type;
 
 
 import java.net.URLEncoder;
@@ -712,39 +715,46 @@ public class Ao3Controller {
     private void populateLibraryViews() {
         if (unlistedListView == null || libraryTilePane == null) return;
 
-        // This line is now handled by loadFolders(), so we can remove it
-        // libraryTilePane.getChildren().clear();
-
         unlistedListView.getItems().clear();
-
         if (libraryPath == null) { return; }
 
         List<Work> offlineWorks = new ArrayList<>();
+
         try (Stream<Path> stream = Files.list(libraryPath)) {
             stream
-                    .filter(p -> p.toString().toLowerCase().endsWith(".html") || p.toString().toLowerCase().endsWith(".txt"))
+                    // 1. Look for .json files (and ignore your folders.json)
+                    .filter(p -> p.toString().toLowerCase().endsWith(".json")
+                            && !p.getFileName().toString().equals("folders.json"))
                     .forEach(path -> {
-                        String filename = path.getFileName().toString().replaceFirst("\\.(txt|html)$", "");
-                        String title = "Unknown Title";
-                        String author = "Unknown Author";
-                        int separatorIndex = filename.lastIndexOf(" - ");
-                        if (separatorIndex != -1) {
-                            title = filename.substring(0, separatorIndex).trim();
-                            author = filename.substring(separatorIndex + 3).trim();
-                        } else {
-                            title = filename;
+                        try (FileReader reader = new FileReader(path.toFile())) {
+
+                            // 2. Read the JSON and turn it back into a Work object
+                            Work offlineWork = gson.fromJson(reader, Work.class);
+
+                            // 3. IMPORTANT: Check if the .html file still exists
+                            if (offlineWork != null && offlineWork.getUrl() != null
+                                    && Files.exists(Paths.get(offlineWork.getUrl()))) {
+
+                                // 4. This object is fully populated!
+                                offlineWorks.add(offlineWork);
+                            } else if (offlineWork != null) {
+                                // The .html file was deleted, so delete the .json file
+                                System.out.println("Orphaned metadata found, deleting: " + path.getFileName());
+                                Files.deleteIfExists(path);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Failed to read metadata file: " + path.getFileName());
+                            e.printStackTrace();
                         }
-                        Work offlineWork = new Work(title, author, path.toFile().getAbsolutePath(), "N/A", "N/A");
-                        offlineWork.setAuthorUrl(null);
-                        offlineWorks.add(offlineWork);
                     });
             unlistedListView.getItems().addAll(offlineWorks);
+
         } catch (IOException e) {
             e.printStackTrace();
             showError("Could not read library directory: " + e.getMessage());
         }
 
-        // --- ADD THIS LINE TO RELOAD THE FOLDERS ---
+        // This reloads your folders (this code is already correct)
         loadFolders();
     }
 

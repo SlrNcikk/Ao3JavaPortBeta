@@ -139,6 +139,12 @@
                     <options>
                         <option>--add-modules</option>
                         <option>javafx.controls,javafx.fxml,javafx.web</option>
+
+                        <option>--add-opens</option>
+                        <option>javafx.base/javafx.beans.property=ALL-UNNAMED</option>
+
+                        <option>--add-opens</option>
+                        <option>javafx.base/com.sun.javafx.binding=ALL-UNNAMED</option>
                     </options>
                 </configuration>
             </plugin>
