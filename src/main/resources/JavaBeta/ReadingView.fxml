@@ -8,11 +8,8 @@
 <?import javafx.scene.layout.Priority?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.web.WebView?>
+<?import javafx.scene.control.TextArea?>
 
-<!--
-  This is File 2 (Updated): ReadingView.fxml
-  - Make sure this line has "JavaBeta.ReadingController"
--->
 <VBox
         fx:controller="JavaBeta.ReadingController"
         xmlns:fx="http://javafx.com/fxml/1"
@@ -25,27 +22,16 @@
         <Insets top="10" right="10" bottom="10" left="10" />
     </padding>
 
-    <!-- Top control bar -->
     <HBox spacing="10" alignment="CENTER_LEFT">
         <Label text="Theme:"/>
         <ChoiceBox fx:id="themeChoiceBox"/>
 
-        <!-- Spacer to push buttons to the right -->
         <HBox HBox.hgrow="ALWAYS" alignment="CENTER_RIGHT" spacing="10">
-            <!-- This is the new button -->
-            <Button fx:id="addReviewButton" text="Add a Review" onAction="#handleAddReviewClick" />
+            <Button fx:id="saveReviewButton" text="Add a Review" onAction="#onAddReviewButtonClick" />
 
             <Button fx:id="downloadButton" text="Download Story" onAction="#onDownloadButtonClick"/>
         </HBox>
     </HBox>
 
-    <!-- WebView to display the story content -->
     <WebView fx:id="storyWebView" VBox.vgrow="ALWAYS"/>
-
-    <!--
-      All the old review/recommendation UI has been REMOVED from this file.
-      It is now in ReviewView.fxml.
-    -->
-
 </VBox>
-

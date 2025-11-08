@@ -11,6 +11,15 @@ import javafx.scene.web.WebView;
 import javafx.stage.Modality;
 import com.google.gson.Gson;
 import javafx.stage.Stage;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.ListView;
+import java.io.FileReader;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
+import java.time.LocalDate;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -21,24 +30,25 @@ import java.nio.file.Paths;
 import java.util.List;
 
 /**
- * This is the UPDATED ReadingController.
- * - All recommendation and review logic has been REMOVED.
- * - A new button 'addReviewButton' has been ADDED.
- * - The 'handleAddReviewClick' method opens the new Review window.
+ * This is the fixed ReadingController, now delegating review submission to a separate window.
  */
 public class ReadingController {
 
     @FXML private ChoiceBox<String> themeChoiceBox;
     @FXML private WebView storyWebView;
     @FXML private Button downloadButton;
-    @FXML private Button addReviewButton; // The new button
+    // ❌ NOTE: The previous inline review FXML elements (reviewBox, ratingChoiceBox, reviewTextArea, saveReviewButton) have been removed.
 
-    // We still need to store these, so we can pass them
-    // to the new ReviewController.
+    // --- Review Data Fields ---
+    private Map<String, UserReview> reviewMap = new HashMap<>();
+    private Path reviewsFilePath;
+
     private Work currentWork;
     private List<Work> allWorks;
 
-    // Base HTML structure with placeholders
+
+
+    // Base HTML structure with placeholders (omitted for brevity)
     private final String HTML_TEMPLATE = """
         <!DOCTYPE html>
         <html>
@@ -75,20 +85,16 @@ public class ReadingController {
                 (obs, oldTheme, newTheme) -> updateTheme(newTheme)
         );
         downloadButton.setDisable(true);
-        addReviewButton.setDisable(true); // Disable review button by default
-        storyWebView.setContextMenuEnabled(false);
+        // ❌ NOTE: Inline review UI setup removed here.
     }
 
-    /**
-     * This is the NEW loadStory for OFFLINE stories.
-     * It's the same as your old one, but we hide the review button.
-     */
+
     public void loadStory(String title, String fileContent, boolean isOffline) {
         this.storyTitle = title;
         this.storyAuthor = "Unknown";
         this.isOfflineStory = isOffline;
-        this.currentWork = null; // No Work object for offline
-        this.allWorks = null; // No list for offline
+        this.currentWork = null;
+        this.allWorks = null;
 
         if (fileContent != null && (fileContent.trim().toLowerCase().startsWith("<!doctype") || fileContent.trim().startsWith("<p"))) {
             this.rawHtmlContent = fileContent;
@@ -102,13 +108,11 @@ public class ReadingController {
         if (stage != null) stage.setTitle(title);
 
         updateWebViewContent("default");
-        downloadButton.setDisable(true); // Disable download for offline
-        addReviewButton.setDisable(true); // Disable reviews for offline
+        downloadButton.setDisable(true);
     }
 
     /**
-     * This is the NEW loadStory for ONLINE stories.
-     * It now saves the work and allWorks list, and enables the review button.
+     * This is the loadStory for ONLINE stories.
      */
     public void loadStory(Work work, String htmlContent, List<Work> allWorks) {
         this.storyTitle = work.getTitle();
@@ -116,7 +120,6 @@ public class ReadingController {
         this.rawHtmlContent = htmlContent;
         this.isOfflineStory = false;
 
-        // Store these so we can pass them to the review window
         this.currentWork = work;
         this.allWorks = allWorks;
 
@@ -124,42 +127,88 @@ public class ReadingController {
         if (stage != null) stage.setTitle(storyTitle);
 
         updateWebViewContent("default");
-        downloadButton.setDisable(false); // Enable download
-        addReviewButton.setDisable(false); // ENABLE review button
+        downloadButton.setDisable(false);
+        loadReviewMap(); // Load existing data for potential review check
+    }
+
+    // --- Review Persistence Logic ---
+
+    private Path getReviewsFilePath() {
+        if (reviewsFilePath != null) {
+            return reviewsFilePath;
+        }
+        Path libraryPath = getLibraryPath();
+        if (libraryPath != null) {
+            reviewsFilePath = libraryPath.resolve("reviews.json");
+            return reviewsFilePath;
+        }
+        return null;
     }
 
     /**
-     * This is the NEW method that runs when you click "Add a Review".
-     * It opens the new ReviewView.fxml window.
+     * Loads the reviews.json file into the reviewMap.
+     */
+    private void loadReviewMap() {
+        Path path = getReviewsFilePath();
+        if (path == null) {
+            reviewMap = new HashMap<>();
+            return;
+        }
+
+        Type type = new TypeToken<HashMap<String, UserReview>>() {}.getType();
+        try (FileReader reader = new FileReader(path.toFile())) {
+            reviewMap = gson.fromJson(reader, type);
+            if (reviewMap == null) {
+                reviewMap = new HashMap<>();
+            }
+            // ❌ NOTE: UI population logic removed here.
+
+        } catch (IOException e) {
+            System.err.println("Could not load reviews file. Starting fresh.");
+            reviewMap = new HashMap<>();
+        }
+    }
+
+    /**
+     * Launches the modal window for review submission.
      */
     @FXML
-    private void handleAddReviewClick() {
-        if (currentWork == null || allWorks == null) {
-            showError("Cannot open review window: data is missing.");
+    protected void onAddReviewButtonClick() {
+        if (currentWork == null || isOfflineStory) {
+            showError("Cannot add a review. The story is offline or not fully loaded.");
             return;
         }
 
         try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/ReviewView.fxml"));
-            Parent root = loader.load();
+            // Load the FXML file for the new review window
+            FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("ReviewView.fxml"));
+            Parent root = fxmlLoader.load();
 
-            ReviewController reviewController = loader.getController();
-            reviewController.loadData(currentWork, allWorks);
+            ReviewController controller = fxmlLoader.getController();
 
-            Stage reviewStage = new Stage();
-            reviewStage.setTitle("Add Review for " + currentWork.getTitle());
-            reviewStage.setScene(new Scene(root));
-            reviewStage.initModality(Modality.WINDOW_MODAL);
-            reviewStage.initOwner(getStage());
-            reviewStage.showAndWait();
+            // ✅ FIX: Using the correct method name (initData) and passing all 4 required parameters in the correct order.
+            controller.initData(
+                    currentWork,
+                    allWorks, // Required for recommendations
+                    reviewMap,
+                    getReviewsFilePath()
+            );
+
+            // Create a new stage (window) for the review submission
+            Stage stage = new Stage();
+            stage.setTitle("Add Review for " + currentWork.getTitle());
+            stage.setScene(new Scene(root));
+            stage.initModality(Modality.APPLICATION_MODAL); // Blocks main window
+            stage.showAndWait();
+
+            // Reload the review map after the submission window is closed
+            loadReviewMap();
 
         } catch (IOException e) {
+            showError("Failed to open review submission window. Check if ReviewSubmissionView.fxml and ReviewSubmissionController.java exist: " + e.getMessage());
             e.printStackTrace();
-            showError("Could not open the review window: " + e.getMessage());
         }
     }
-
-    // --- All your other methods (Download, Theme, Helpers) stay the same ---
 
     @FXML
     protected void onDownloadButtonClick() {
@@ -275,4 +324,3 @@ public class ReadingController {
         alert.showAndWait();
     }
 }
-

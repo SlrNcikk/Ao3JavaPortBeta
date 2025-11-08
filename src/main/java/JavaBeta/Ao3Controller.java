@@ -3,8 +3,8 @@ package JavaBeta;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
-import java.util.List;
-import java.util.ArrayList;
+
+import java.util.*;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
@@ -32,7 +32,6 @@ import com.google.gson.reflect.TypeToken;
 import java.io.FileReader;
 import java.lang.reflect.Type;
 
-
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
@@ -51,10 +50,9 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.io.FileReader;
+
 import java.io.FileWriter;
-import java.lang.reflect.Type;
+
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -78,10 +76,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.StringJoiner;
 import java.util.stream.Stream;
 
 public class Ao3Controller {
@@ -90,6 +84,8 @@ public class Ao3Controller {
     @FXML private Button searchButton, refreshLibraryButton, clearButton;
     @FXML private Button modeSwitchButton;
     @FXML private ImageView modeImageView;
+    @FXML private Button myReviewsButton;
+    @FXML private FontIcon myReviewsIcon;
     @FXML private ProgressIndicator loadingIndicator;
     @FXML private Label timeLabel;
     @FXML private ListView<Work> resultsListView;
@@ -126,6 +122,95 @@ public class Ao3Controller {
     @FXML private ListView<Work> newFolderFicsListView;
     @FXML private Button createFolderButton;
 
+
+    private Path getReviewsFilePath() {
+        // This method looks correct as a safety fallback.
+        // We will ensure libraryPath is properly initialized in the Ao3Controller's initialize method.
+        if (libraryPath != null) {
+            return libraryPath.resolve("reviews.json");
+        }
+        // Fallback in case libraryPath isn't set
+        try {
+            Path path = Paths.get(System.getProperty("user.home"), "AO3_Offline_Library");
+            if (!Files.exists(path)) Files.createDirectories(path);
+            return path.resolve("reviews.json");
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private Map<String, UserReview> loadReviewMap() {
+        Path path = getReviewsFilePath();
+        if (path == null || !Files.exists(path)) {
+            return new HashMap<>(); // No file exists, return an empty map
+        }
+
+        Type type = new TypeToken<HashMap<String, UserReview>>() {}.getType();
+
+        // Declare the map outside the try-block so it can be returned
+        Map<String, UserReview> reviewMap = new HashMap<>();
+
+        // ✅ FIX: Use FileReader (for reading) and define the resource as 'reader'
+        try (FileReader reader = new FileReader(path.toFile())) {
+
+            // ✅ FIX: Remove the WRITER logic (gson.toJson(allFolders, writer);)
+
+            // Assign the parsed JSON to the map
+            reviewMap = gson.fromJson(reader, type);
+
+            // Handle case where file is empty or contains null (Gson can return null)
+            if (reviewMap == null) {
+                reviewMap = new HashMap<>();
+            }
+
+            // The reader automatically closes here.
+        } catch (IOException e) {
+            System.err.println("Could not load reviews file. Starting fresh.");
+            e.printStackTrace(); // Keep this for debugging if it fails
+            return new HashMap<>();
+        }
+
+        // Return the loaded map
+        return reviewMap;
+    }
+
+    @FXML
+    private void onMyReviewsClick() {
+        try {
+            // 1. Load the "reviews.json" file
+            Map<String, UserReview> reviewMap = loadReviewMap();
+            if (reviewMap.isEmpty()) {
+                showInfo("No reviews found.", "You haven't written any reviews yet!");
+                return;
+            }
+
+            // 2. Load the Review Library FXML
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/ReviewLibraryView.fxml"));
+            Parent root = loader.load();
+
+            // 3. Get the controller and pass it the data
+            ReviewLibraryController controller = loader.getController();
+            controller.loadReviews(reviewMap.values(), this); // Pass all reviews
+
+            // 4. Create and show the new window
+            Stage stage = new Stage();
+            stage.setTitle("My Review Library");
+            stage.setScene(new Scene(root));
+
+            // 5. Copy theme
+            if (themeButton != null && themeButton.getScene() != null) {
+                stage.getScene().getStylesheets().addAll(themeButton.getScene().getStylesheets());
+            }
+
+            stage.initModality(Modality.APPLICATION_MODAL);
+            stage.show();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            showError("Could not open Review Library: " + e.getMessage());
+        }
+    }
     // ✅ --- NEW: Label for the tooltip alternative ---
     @FXML private Label tooltipLabel;
     private final Gson gson = new Gson();
@@ -254,6 +339,7 @@ public class Ao3Controller {
         }
 
         // --- Setup Button Icons ---
+        if (myReviewsIcon != null) myReviewsIcon.setIconCode(FontAwesomeSolid.STAR);
         if (settingsIcon != null) settingsIcon.setIconCode(Elusive.COG);
         if (themeIcon != null) themeIcon.setIconCode(Entypo.ADJUST);
         if (deleteIcon != null) deleteIcon.setIconCode(FontAwesomeSolid.TRASH);
@@ -727,42 +813,52 @@ public class Ao3Controller {
         if (libraryPath == null) { return; }
 
         List<Work> offlineWorks = new ArrayList<>();
+        // ✅ NEW: List to hold paths of files to delete after the streams are closed
+        List<Path> pathsToDelete = new ArrayList<>();
 
         try (Stream<Path> stream = Files.list(libraryPath)) {
             stream
-                    // 1. Look for .json files (and ignore your folders.json)
                     .filter(p -> p.toString().toLowerCase().endsWith(".json")
+                            && !p.getFileName().toString().equals("reviews.json")
                             && !p.getFileName().toString().equals("folders.json"))
                     .forEach(path -> {
+                        // The FileReader is scoped to this inner try-with-resources block
                         try (FileReader reader = new FileReader(path.toFile())) {
-
-                            // 2. Read the JSON and turn it back into a Work object
                             Work offlineWork = gson.fromJson(reader, Work.class);
 
-                            // 3. IMPORTANT: Check if the .html file still exists
                             if (offlineWork != null && offlineWork.getUrl() != null
                                     && Files.exists(Paths.get(offlineWork.getUrl()))) {
-
-                                // 4. This object is fully populated!
+                                // File is valid and its HTML exists
                                 offlineWorks.add(offlineWork);
                             } else if (offlineWork != null) {
-                                // The .html file was deleted, so delete the .json file
-                                System.out.println("Orphaned metadata found, deleting: " + path.getFileName());
-                                Files.deleteIfExists(path);
+                                // Orphaned metadata found (HTML missing) - MARK FOR DELETION
+                                System.out.println("Orphaned metadata found, marking for deletion: " + path.getFileName());
+                                pathsToDelete.add(path); // <-- MARK HERE
                             }
                         } catch (Exception e) {
                             System.err.println("Failed to read metadata file: " + path.getFileName());
                             e.printStackTrace();
+                            pathsToDelete.add(path); // Also delete if reading fails completely
                         }
+                        // The reader stream is closed here (end of the inner try-catch block)
                     });
-            unlistedListView.getItems().addAll(offlineWorks);
 
         } catch (IOException e) {
             e.printStackTrace();
             showError("Could not read library directory: " + e.getMessage());
         }
 
-        // This reloads your folders (this code is already correct)
+        // ✅ NEW: Execute deletions after the main stream is closed
+        for (Path path : pathsToDelete) {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                System.err.println("Failed to delete orphaned file: " + path.getFileName());
+                e.printStackTrace();
+            }
+        }
+
+        unlistedListView.getItems().addAll(offlineWorks);
         loadFolders();
     }
 

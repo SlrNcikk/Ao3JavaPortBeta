@@ -34,6 +34,12 @@
                         <ImageView fitHeight="53.0" fitWidth="137.0" onMouseClicked="#openSpotify" pickOnBounds="true" preserveRatio="true" styleClass="clickable-image" style="-fx-cursor: hand;"><image><Image url="@spot.png" /></image></ImageView>
                         <VBox />
 
+                        <Button fx:id="myReviewsButton" onAction="#onMyReviewsClick" text="My Review Library" styleClass="button" HBox.hgrow="ALWAYS">
+                            <graphic>
+                                <FontIcon fx:id="myReviewsIcon" iconLiteral="fa-star" />
+                            </graphic>
+                        </Button>
+
                         <Button fx:id="settingsButton" mnemonicParsing="false" onAction="#onSettingsButtonClick" style="-fx-background-color: transparent; -fx-padding: 1; -fx-cursor: hand;"
                                 onMouseEntered="#onSettingsEnter" onMouseExited="#onMouseExit">
                             <graphic><FontIcon fx:id="settingsIcon" iconLiteral="eli-cog" iconSize="24" /></graphic>
