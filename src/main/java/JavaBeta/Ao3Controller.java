@@ -16,6 +16,17 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.geometry.Pos;
 import javafx.scene.text.TextAlignment;
+import org.openqa.selenium.By;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.TimeoutException;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import javafx.util.Duration;
+import org.openqa.selenium.support.ui.WebDriverWait;
+
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -38,7 +49,6 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.lang.reflect.Type;
 import javafx.scene.control.cell.PropertyValueFactory; // RESTORED
 import javafx.scene.image.Image;
@@ -48,7 +58,6 @@ import javafx.scene.layout.VBox;
 import javafx.scene.layout.TilePane; // Import for TilePane
 import javafx.scene.layout.BorderPane; // RESTORED
 import javafx.scene.layout.StackPane; // RESTORED
-import javafx.util.Duration;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -292,6 +301,7 @@ public class Ao3Controller {
         // --- Configure "Unlisted" ListView (OFFLINE) ---
         if (unlistedListView != null) {
             unlistedListView.setPlaceholder(new Label("No unlisted fics found."));
+            unlistedListView.setCellFactory(listView -> new WorkCellController(this));
             unlistedListView.setOnDragDetected(event -> {
                 Work selectedWork = unlistedListView.getSelectionModel().getSelectedItem();
                 if (selectedWork != null) {
@@ -854,8 +864,7 @@ public class Ao3Controller {
     }
 
     // --- RESTORED: All story loading methods ---
-    private void loadAndShowStory(Work work, List<Work> allWorks) {
-        // ---
+    public void loadAndShowStory(Work work, List<Work> allWorks) {        // ---
         Alert loadingAlert = new Alert(Alert.AlertType.INFORMATION);
         loadingAlert.setTitle("Loading Story");
         loadingAlert.setHeaderText("Please wait, fetching story content...");
@@ -1012,109 +1021,165 @@ public class Ao3Controller {
                 String url = "https://archiveofourown.org/works/search?work_search[query]=" + encodedQuery;
                 System.out.println("DEBUG: Connecting to URL -> " + url);
 
-                try {
-                    Document doc = Jsoup.connect(url)
-                            .userAgent(userAgent)
-                            .referrer("https.www.google.com")
-                            .timeout(10000) // 10-second timeout
-                            .get();
-                    Elements workElements = doc.select("li.work.blurb");
-                    System.out.println("DEBUG: Connection successful. Found " + workElements.size() + " works on the page.");
+                WebDriver driver = null; // Define driver here to close it in finally
+                int maxRetries = 3;
 
+                for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                        System.out.println("DEBUG: Selenium attempt " + attempt + "...");
 
-                    for (Element workEl : workElements) {
-                        Element titleEl = workEl.selectFirst("h4.heading a[href^='/works/']");
-                        Element authorEl = workEl.selectFirst("a[rel=author]");
-                        Element dateEl = workEl.selectFirst("p.datetime");
+                        // ==========================================================
+                        // === 1. SET UP AND LAUNCH SELENIUM BROWSER (HEADLESS) ===
+                        // ==========================================================
+                        ChromeOptions options = new ChromeOptions();
+                        options.addArguments("--headless=new"); // Run hidden
+                        options.addArguments("--user-agent=" + userAgent);
+                        options.addArguments("--log-level=3"); // Suppress console noise
+                        options.addArguments("--disable-gpu");
+                        options.addArguments("--blink-settings=imagesEnabled=false"); // Don't load images
 
-                        // ✅ --- NEW SCRAPING LOGIC ---
-                        Element fandomEl = workEl.selectFirst("h5.fandoms a");
-                        Elements relationshipEls = workEl.select("li.relationships a");
-                        Elements characterEls = workEl.select("li.characters a");
-                        Elements tagElements = workEl.select("li.freeforms a.tag"); // This is the "freeform" tags
-                        // --- END NEW LOGIC ---
+                        driver = new ChromeDriver(options);
 
-                        if (titleEl != null && dateEl != null) {
-                            String title = titleEl.text();
-                            String workUrl = "https://archiveofourown.org" + titleEl.attr("href");
-                            String author;
-                            String authorUrl;
+                        // ==========================================================
+                        // === 2. NAVIGATE AND HANDLE "PROCEED" PAGE ===
+                        // ==========================================================
+                        driver.get(url);
+                        System.out.println("DEBUG: Browser navigated to URL.");
 
-                            if (authorEl != null) {
-                                author = authorEl.text();
-                                if (author.equals("orphan_account") || author.equals("Anonymous")) {
-                                    authorUrl = null;
-                                } else {
-                                    authorUrl = "https://archiveofourown.org" + authorEl.attr("href");
-                                }
+                        try {
+                            // Look for the "Proceed" button. Be specific with the selector.
+                            WebElement proceedButton = driver.findElement(By.cssSelector("form.adult input[type='submit'][value='Proceed']"));
+
+                            if (proceedButton != null) {
+                                System.out.println("DEBUG: Found 'Proceed' button. Clicking it...");
+                                proceedButton.click();
+
+                                // Wait for the *new* page (search results) to load
+                                // Wait for EITHER the results OR the "No results" header
+                                WebDriverWait wait = new WebDriverWait(driver, java.time.Duration.ofSeconds(10));                                wait.until(ExpectedConditions.or(
+                                        ExpectedConditions.presenceOfElementLocated(By.cssSelector("li.work.blurb")),
+                                        ExpectedConditions.presenceOfElementLocated(By.cssSelector("h4.heading:contains(No results found)"))
+                                ));
+                                System.out.println("DEBUG: Search results page loaded.");
+                            }
+                        } catch (NoSuchElementException e) {
+                            // "Proceed" button wasn't found. We're on the results page.
+                            System.out.println("DEBUG: 'Proceed' button not found, assuming direct access.");
+                        } catch (TimeoutException e) {
+                            throw new IOException("Failed to load search results after clicking 'Proceed'.", e);
+                        }
+
+                        // ==========================================================
+                        // === 3. GET HTML AND HAND OFF TO JSOUP ===
+                        // ==========================================================
+                        String finalHtml = driver.getPageSource();
+                        Document doc = Jsoup.parse(finalHtml);
+
+                        // ==========================================================
+                        // === 4. YOUR EXISTING JSOUP LOGIC (UNCHANGED) ===
+                        // ==========================================================
+                        System.out.println("DEBUG: Connection successful. Parsing with Jsoup...");
+                        Elements workElements = doc.select("li.work.blurb");
+
+                        // ✅ --- THIS IS THE NEW CHECK ---
+                        if (workElements.isEmpty()) {
+                            Element noResultsHeader = doc.selectFirst("h4.heading:contains(No results found)");
+                            if (noResultsHeader == null) {
+                                System.err.println("DEBUG: Got 0 works, but no 'No results' message. AO3 structure might have changed.");
                             } else {
-                                Element headingEl = workEl.selectFirst("h4.heading");
-                                String headingText = (headingEl != null) ? headingEl.text() : "";
-                                String[] headingParts = headingText.split(" by ");
-                                if (headingParts.length > 1) {
-                                    author = headingParts[1];
+                                System.out.println("DEBUG: Found 'No results found' page.");
+                            }
+                        }
+                        // ✅ --- END OF CHECK ---
+
+                        for (Element workEl : workElements) {
+                            // ... (all your existing scraping logic) ...
+                            Element titleEl = workEl.selectFirst("h4.heading a[href^='/works/']");
+                            Element authorEl = workEl.selectFirst("a[rel=author]");
+                            Element dateEl = workEl.selectFirst("p.datetime");
+                            Element fandomEl = workEl.selectFirst("h5.fandoms a");
+                            Elements relationshipEls = workEl.select("li.relationships a");
+                            Elements characterEls = workEl.select("li.characters a");
+                            Elements tagElements = workEl.select("li.freeforms a.tag");
+
+                            if (titleEl != null && dateEl != null) {
+                                // ... (all your scraping logic for title, author, etc.) ...
+                                String title = titleEl.text();
+                                String workUrl = "https://archiveofourown.org" + titleEl.attr("href");
+                                String author;
+                                String authorUrl;
+
+                                if (authorEl != null) {
+                                    author = authorEl.text();
+                                    if (author.equals("orphan_account") || author.equals("Anonymous")) {
+                                        authorUrl = null;
+                                    } else {
+                                        authorUrl = "https://archiveofourown.org" + authorEl.attr("href");
+                                    }
                                 } else {
-                                    author = "Anonymous";
+                                    Element headingEl = workEl.selectFirst("h4.heading");
+                                    String headingText = (headingEl != null) ? headingEl.text() : "";
+                                    String[] headingParts = headingText.split(" by ");
+                                    if (headingParts.length > 1) {
+                                        author = headingParts[1];
+                                    } else {
+                                        author = "Anonymous";
+                                    }
+                                    authorUrl = null;
                                 }
-                                authorUrl = null;
-                            }
 
-                            String lastUpdated = dateEl.text();
+                                String lastUpdated = dateEl.text();
+                                String fandom = (fandomEl != null) ? fandomEl.text() : "N/A";
+                                String relationships = relationshipEls.stream().map(Element::text).collect(Collectors.joining(", "));
+                                String characters = characterEls.stream().map(Element::text).collect(Collectors.joining(", "));
+                                String tags = tagElements.stream().map(Element::text).collect(Collectors.joining(", "));
+                                String rating = "Not Rated";
+                                String category = "No Category";
+                                String warnings = "No Warnings";
+                                String completionStatus = "In Progress";
 
-                            // --- NEW: Scrape Fandom, Relationships, Characters, and Freeforms ---
-                            String fandom = (fandomEl != null) ? fandomEl.text() : "N/A";
-
-                            String relationships = relationshipEls.stream()
-                                    .map(Element::text)
-                                    .collect(Collectors.joining(", "));
-
-                            String characters = characterEls.stream()
-                                    .map(Element::text)
-                                    .collect(Collectors.joining(", "));
-
-                            String tags = tagElements.stream()
-                                    .map(Element::text)
-                                    .collect(Collectors.joining(", "));
-                            // ---
-
-                            // Scrape Header Icons
-                            String rating = "Not Rated";
-                            String category = "No Category";
-                            String warnings = "No Warnings";
-                            String completionStatus = "In Progress";
-
-                            Elements requiredTags = workEl.select("ul.required-tags span.tag-h");
-
-                            for (Element tagSpan : requiredTags) {
-                                String titleAttr = tagSpan.attr("title");
-
-                                if (titleAttr.startsWith("Rating:")) {
-                                    rating = titleAttr.substring("Rating: ".length());
-                                } else if (titleAttr.startsWith("Category:")) {
-                                    category = titleAttr.substring("Category: ".length());
-                                } else if (titleAttr.startsWith("Warnings:")) {
-                                    warnings = titleAttr.substring("Warnings: ".length());
-                                } else if (titleAttr.startsWith("Completion Status:")) {
-                                    completionStatus = titleAttr.substring("Completion Status: ".length());
+                                Elements requiredTags = workEl.select("ul.required-tags span.tag-h");
+                                for (Element tagSpan : requiredTags) {
+                                    String titleAttr = tagSpan.attr("title");
+                                    if (titleAttr.startsWith("Rating:")) {
+                                        rating = titleAttr.substring("Rating: ".length());
+                                    } else if (titleAttr.startsWith("Category:")) {
+                                        category = titleAttr.substring("Category: ".length());
+                                    } else if (titleAttr.startsWith("Warnings:")) {
+                                        warnings = titleAttr.substring("Warnings: ".length());
+                                    } else if (titleAttr.startsWith("Completion Status:")) {
+                                        completionStatus = titleAttr.substring("Completion Status: ".length());
+                                    }
                                 }
+
+                                Work newWork = new Work(title, author, workUrl, tags, lastUpdated,
+                                        rating, category, warnings, completionStatus,
+                                        fandom, relationships, characters);
+                                newWork.setAuthorUrl(authorUrl);
+                                worksList.add(newWork);
                             }
+                        }
 
-                            // ✅ --- THIS IS THE FIX ---
-                            // This now correctly calls the 12-argument constructor
-                            Work newWork = new Work(title, author, workUrl, tags, lastUpdated,
-                                    rating, category, warnings, completionStatus,
-                                    fandom, relationships, characters);
+                        // Success! Break out of the retry loop.
+                        break;
 
-                            newWork.setAuthorUrl(authorUrl); // Set the author URL
-                            worksList.add(newWork);
+                    } catch (Exception e) {
+                        System.err.println("DEBUG: Selenium attempt " + attempt + " failed: " + e.getMessage());
+                        if (attempt == maxRetries) {
+                            System.err.println("DEBUG: All retries failed.");
+                            throw e; // This will trigger the "onFailed" part of your Task
+                        }
+                        Thread.sleep(2000); // Wait 2 seconds before retry
+                    } finally {
+                        // ==========================================================
+                        // === 5. ALWAYS CLOSE THE BROWSER (VERY IMPORTANT) ===
+                        // ==========================================================
+                        if (driver != null) {
+                            driver.quit(); // Closes the browser and ends the process
+                            System.out.println("DEBUG: WebDriver quit.");
                         }
                     }
-
-                } catch (Exception e) {
-                    System.err.println("DEBUG: Scraping failed!");
-                    e.printStackTrace();
-                    throw e;
-                }
+                } // --- END of Retry Logic ---
 
                 if (!worksList.isEmpty()) {
                     Thread.sleep(300);
@@ -1129,8 +1194,10 @@ public class Ao3Controller {
             @Override
             protected String call() throws Exception {
                 final String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36";
-                Document doc = Jsoup.connect(work.getUrl() + "?view_full_work=true").userAgent(userAgent).get();
-                Element workskin = doc.selectFirst("#workskin");
+                Document doc = Jsoup.connect(work.getUrl() + "?view_full_work=true")
+                        .userAgent(userAgent)
+                        .cookie("view_adult", "true") // ✅ Add this cookie
+                        .get();                Element workskin = doc.selectFirst("#workskin");
                 if (workskin == null) {
                     return "<html><body>Could not find story content. It might be a restricted work.</body></html>";
                 }

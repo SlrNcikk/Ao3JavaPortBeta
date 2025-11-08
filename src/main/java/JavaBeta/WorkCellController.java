@@ -16,14 +16,10 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * This class is both the Controller for WorkCell.fxml AND
- * the ListCell that will be displayed in the ListView.
- */
 public class WorkCellController extends ListCell<Work> {
 
     // --- FXML UI Elements ---
-    @FXML private VBox root; // The main VBox from the FXML
+    @FXML private VBox root;
     @FXML private GridPane iconsGrid;
     @FXML private ImageView ratingIcon;
     @FXML private ImageView categoryIcon;
@@ -53,10 +49,9 @@ public class WorkCellController extends ListCell<Work> {
             setText(null);
             setGraphic(null);
         } else {
-            // --- 1. Load the FXML if we haven't already ---
             if (fxmlLoader == null) {
                 fxmlLoader = new FXMLLoader(getClass().getResource("/JavaBeta/WorkCell.fxml"));
-                fxmlLoader.setController(this); // Tell the FXML this class is its controller
+                fxmlLoader.setController(this);
                 try {
                     fxmlLoader.load();
                 } catch (IOException e) {
@@ -64,55 +59,58 @@ public class WorkCellController extends ListCell<Work> {
                 }
             }
 
-            // --- 2. Populate the FXML with data from the Work object ---
+            // --- 2. Populate Data ---
             titleLabel.setText(work.getTitle());
             authorLabel.setText(work.getAuthor());
             lastUpdatedLabel.setText(work.getLastUpdated());
-
-            // ✅ --- ADDED FANDOM ---
             fandomLabel.setText(work.getFandom());
 
             // --- 3. Set Icons ---
-            // ✅ --- UPDATED TO SET ALL ICONS ---
             ratingIcon.setImage(getIconForRating(work.getRating()));
             categoryIcon.setImage(getIconForCategory(work.getCategory()));
             warningIcon.setImage(getIconForWarning(work.getWarnings()));
             completionIcon.setImage(getIconForCompletion(work.getCompletionStatus()));
 
-            // --- 4. Build the rich text for the tags ---
+            // --- 4. Build Tags ---
             buildTagsTextFlow(work);
 
-            // --- 5. Add click handler for the author ---
+            // --- 5. Click Handler ---
             authorLabel.setOnMouseClicked(event -> {
                 if (mainController != null) {
                     mainController.openAuthorProfile(work);
                 }
             });
 
-            // --- 6. Finally, display the cell ---
+            root.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2 && mainController != null) {
+                    // Check the URL to see if it's an offline file or online link
+                    String url = work.getUrl();
+                    if (url != null && (url.endsWith(".html") || url.endsWith(".txt"))) {
+                        // It's an offline fic from the "Unlisted" list
+                        mainController.loadStoryFromLibrary(work);
+                    } else {
+                        // It's an online fic from the "Search" list
+                        mainController.loadAndShowStory(work, getListView().getItems());
+                    }
+                }
+            });
+
+            // --- 6. Display Cell ---
             setText(null);
             setGraphic(root);
         }
     }
 
-    /**
-     * Creates the styled text for the tags
-     */
     private void buildTagsTextFlow(Work work) {
-        tagsTextFlow.getChildren().clear(); // Clear old tags
+        tagsTextFlow.getChildren().clear();
 
-        // ✅ --- UPDATED TO ADD ALL TAGS ---
         addTagToFlow("Warnings:", work.getWarnings(), false);
         addTagToFlow("Relationships:", work.getRelationships(), true);
         addTagToFlow("Characters:", work.getCharacters(), true);
         addTagToFlow("Freeforms:", work.getTags(), false);
     }
 
-    /**
-     * Helper to add a styled label and value to the TextFlow
-     */
     private void addTagToFlow(String labelText, String valueText, boolean isLinkStyle) {
-        // Don't add a tag if the value is empty or N/A
         if (valueText == null || valueText.isBlank() || valueText.equals("N/A")) {
             return;
         }
@@ -120,13 +118,15 @@ public class WorkCellController extends ListCell<Work> {
         Text label = new Text(labelText + " ");
         label.setStyle("-fx-font-weight: bold;");
 
-        Text value = new Text(valueText + "  "); // Add extra space for separation
+        Text value = new Text(valueText + "  ");
         if (isLinkStyle) {
-            value.setStyle("-fx-fill: #0066cc;"); // Make it look like a link
+            value.setStyle("-fx-fill: #0066cc;");
         }
 
         tagsTextFlow.getChildren().addAll(label, value);
     }
+
+    // ✅ --- START OF FIXED ICON METHODS ---
 
     /**
      * Gets the correct icon image based on the rating string.
@@ -142,7 +142,9 @@ public class WorkCellController extends ListCell<Work> {
         return getIconFromCache("/JavaBeta/icons/" + filename);
     }
 
-    // ✅ --- ADDED THIS MISSING METHOD ---
+    /**
+     * Gets the correct icon for category.
+     */
     private Image getIconForCategory(String category) {
         String filename = switch (category) {
             case "M/M" -> "mmalt.png";
@@ -156,6 +158,9 @@ public class WorkCellController extends ListCell<Work> {
         return getIconFromCache("/JavaBeta/icons/" + filename);
     }
 
+    /**
+     * Gets the correct icon for warnings.
+     */
     private Image getIconForWarning(String warnings) {
         String filename = switch (warnings) {
             case "Creator Chose Not To Use Archive Warnings" -> "exclaimquestion.png";
@@ -168,6 +173,9 @@ public class WorkCellController extends ListCell<Work> {
         return getIconFromCache("/JavaBeta/icons/" + filename);
     }
 
+    /**
+     * Gets the correct icon for completion status.
+     */
     private Image getIconForCompletion(String completionStatus) {
         String filename = switch (completionStatus) {
             case "Complete Work" -> "check.png";
@@ -193,5 +201,5 @@ public class WorkCellController extends ListCell<Work> {
         return iconCache.get(path);
     }
 
-    // ✅ --- THE STRAY CODE BLOCK AT THE END HAS BEEN DELETED ---
+    // ✅ --- END OF FIXED ICON METHODS ---
 }
