@@ -164,11 +164,12 @@ public class WorkCellController extends ListCell<Work> {
     private Image getIconForWarning(String warnings) {
         String filename = switch (warnings) {
             case "Creator Chose Not To Use Archive Warnings" -> "exclaimquestion.png";
-            case "Graphic Depictions Of Violence" -> "exlamationpoint.png";
-            case "Rape/Non-Con" -> "exlamationpoint.png"; // Fallback
-            case "Major Character Death" -> "exlamationpoint.png"; // Fallback
-            case "Underage" -> "exlamationpoint.png"; // Fallback
-            default -> "exclaimquestion.png"; // Default for "No Warnings"
+            case "Graphic Depictions Of Violence", "Rape/Non-Con", "Major Character Death", "Underage" -> "exlamationpoint.png";
+
+            // ✅ ADD "No Warnings" HERE
+            case "No Warnings", "No Archive Warnings Apply" -> "check.png";
+
+            default -> "exclaimquestion.png";
         };
         return getIconFromCache("/JavaBeta/icons/" + filename);
     }

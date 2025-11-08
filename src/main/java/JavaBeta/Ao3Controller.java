@@ -2,7 +2,7 @@ package JavaBeta;
 
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
-import javafx.animation.KeyValue; // Import for animation
+import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
@@ -11,7 +11,7 @@ import javafx.scene.Scene;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
-import javafx.stage.FileChooser; // For picking images
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.geometry.Pos;
@@ -35,9 +35,9 @@ import javafx.geometry.Rectangle2D;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
 
-// ✅ --- FIX: This is the correct JavaFX TextArea ---
+
 import javafx.scene.control.TextArea;
-import java.io.File; // For the image file
+import java.io.File;
 import java.io.IOException;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
@@ -50,14 +50,14 @@ import com.google.gson.reflect.TypeToken;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.lang.reflect.Type;
-import javafx.scene.control.cell.PropertyValueFactory; // RESTORED
+import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.scene.layout.TilePane; // Import for TilePane
-import javafx.scene.layout.BorderPane; // RESTORED
-import javafx.scene.layout.StackPane; // RESTORED
+import javafx.scene.layout.TilePane;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.StackPane;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -66,8 +66,6 @@ import org.kordamp.ikonli.elusive.Elusive;
 import org.kordamp.ikonli.entypo.Entypo;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.javafx.FontIcon;
-
-// ✅ --- FIX: Changed from 'import java.awt.*;' to the specific class you need ---
 import java.awt.Desktop;
 import java.net.URL;
 import java.nio.file.Files;
@@ -77,13 +75,12 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional; // Keep for Alert
-import java.util.StringJoiner; // Keep for buildSearchQuery
+import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.stream.Stream;
 
 public class Ao3Controller {
 
-    // --- FXML UI Elements (From your original file) ---
     @FXML private TextField anyField, titleField, authorField, tagsField;
     @FXML private Button searchButton, refreshLibraryButton, clearButton;
     @FXML private Button modeSwitchButton;
@@ -1133,24 +1130,23 @@ public class Ao3Controller {
                                 String relationships = relationshipEls.stream().map(Element::text).collect(Collectors.joining(", "));
                                 String characters = characterEls.stream().map(Element::text).collect(Collectors.joining(", "));
                                 String tags = tagElements.stream().map(Element::text).collect(Collectors.joining(", "));
-                                String rating = "Not Rated";
-                                String category = "No Category";
-                                String warnings = "No Warnings";
-                                String completionStatus = "In Progress";
+                                // --- New, Correct Tag Scraping ---
 
-                                Elements requiredTags = workEl.select("ul.required-tags span.tag-h");
-                                for (Element tagSpan : requiredTags) {
-                                    String titleAttr = tagSpan.attr("title");
-                                    if (titleAttr.startsWith("Rating:")) {
-                                        rating = titleAttr.substring("Rating: ".length());
-                                    } else if (titleAttr.startsWith("Category:")) {
-                                        category = titleAttr.substring("Category: ".length());
-                                    } else if (titleAttr.startsWith("Warnings:")) {
-                                        warnings = titleAttr.substring("Warnings: ".length());
-                                    } else if (titleAttr.startsWith("Completion Status:")) {
-                                        completionStatus = titleAttr.substring("Completion Status: ".length());
-                                    }
-                                }
+// Rating
+                                Element ratingEl = workEl.selectFirst("span.rating span.text");
+                                String rating = (ratingEl != null) ? ratingEl.text() : "Not Rated";
+
+// Category
+                                Element categoryEl = workEl.selectFirst("span.category span.text");
+                                String category = (categoryEl != null) ? categoryEl.text() : "No Category";
+
+// Warnings
+                                Element warningEl = workEl.selectFirst("span.warnings span.text");
+                                String warnings = (warningEl != null) ? warningEl.text() : "Creator Chose Not To Use Archive Warnings";
+
+// Completion Status
+                                Element completeEl = workEl.selectFirst("span.iswip span.text");
+                                String completionStatus = (completeEl != null) ? completeEl.text() : "Complete Work";
 
                                 Work newWork = new Work(title, author, workUrl, tags, lastUpdated,
                                         rating, category, warnings, completionStatus,
