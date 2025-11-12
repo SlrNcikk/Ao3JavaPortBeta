@@ -94,6 +94,11 @@
                                 <Button fx:id="searchButton" maxWidth="1.7976931348623157E308" onAction="#onSearchButtonClick" text="Search" HBox.hgrow="ALWAYS" style="-fx-cursor: hand;" />
                                 <Button fx:id="clearButton" maxWidth="1.7976931348623157E3" onAction="#onClearButtonClick" text="Clear" HBox.hgrow="ALWAYS" style="-fx-cursor: hand;" />
                             </HBox>
+                            <TitledPane fx:id="historyTitledPane" text="Search History" collapsible="true" expanded="false" maxWidth="1.7976931348623157E308" style="-fx-font-weight: bold;">
+                                <content>
+                                    <FlowPane fx:id="historyFlowPane" hgap="5.0" vgap="5.0" style="-fx-padding: 5;"/>
+                                </content>
+                            </TitledPane>
                         </VBox>
                     </left>
 

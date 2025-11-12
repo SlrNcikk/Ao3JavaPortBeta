@@ -13,6 +13,7 @@ import javafx.scene.Scene;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
+import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -56,11 +57,6 @@ import java.io.FileWriter;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
-import javafx.scene.layout.TilePane;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.StackPane;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -83,6 +79,8 @@ public class Ao3Controller {
     @FXML private TextField anyField, titleField, authorField, tagsField;
     @FXML private Button searchButton, refreshLibraryButton, clearButton;
     @FXML private Button modeSwitchButton;
+    @FXML private TitledPane historyTitledPane;
+    @FXML   private FlowPane historyFlowPane;
     @FXML private ImageView modeImageView;
     @FXML private Button myReviewsButton;
     @FXML private FontIcon myReviewsIcon;
@@ -121,6 +119,7 @@ public class Ao3Controller {
     @FXML private VBox addFicDropTarget;
     @FXML private ListView<Work> newFolderFicsListView;
     @FXML private Button createFolderButton;
+
 
 
     private Path getReviewsFilePath() {
@@ -232,43 +231,6 @@ public class Ao3Controller {
     private String darkThemePath;
 
     // --- Restored: handleLaunchChat, openSpotify, openAuthorProfile ---
-    @FXML
-    private void handleLaunchChat() {
-        try {
-            // 1. Load the Chat Application FXML
-            FXMLLoader fxmlLoader = new FXMLLoader(
-                    getClass().getResource("chat-view.fxml"));
-            Parent root = fxmlLoader.load();
-
-            // 2. Initialize the Chat Logic (Same as what was in ChatApplication.start)
-            Stage chatStage = new Stage();
-
-            // NOTE: The PEER_PORT needs to be dynamic if you plan to launch
-            // multiple chat instances from the same main application in the future.
-            final int PEER_PORT = 5000;
-
-            // Initialize the networking core and inject it into the controller
-            ChatController chatController = fxmlLoader.getController();
-            P2PPeer peer = new P2PPeer(PEER_PORT, chatController);
-
-            chatController.setPeer(peer);
-            peer.startListening();
-
-            // 3. Display the new chat window
-            chatStage.setTitle("P2P Chat - Listening on Port " + PEER_PORT);
-            chatStage.setScene(new Scene(root, 600, 400));
-
-            // Optional: Add a listener to stop the peer when the chat window is closed
-            chatStage.setOnCloseRequest(e -> peer.stopListening());
-
-            chatStage.show();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-            // Handle error, e.g., show an Alert
-            System.err.println("Error loading chat view: " + e.getMessage());
-        }
-    }
 
     @FXML
     private void openSpotify() {
