@@ -3,10 +3,10 @@ package JavaBeta;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
-
 import java.util.*;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
+import org.openqa.selenium.Cookie;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -32,15 +32,12 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import com.google.gson.reflect.TypeToken;
 import java.io.FileReader;
 import java.lang.reflect.Type;
-
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
-
-
 import javafx.scene.control.TextArea;
 import java.io.File;
 import java.io.IOException;
@@ -51,9 +48,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import com.google.gson.Gson;
-
 import java.io.FileWriter;
-
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -74,13 +69,13 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.stream.Stream;
 
-public class Ao3Controller {
+public class Ao3Controller{
 
     @FXML private TextField anyField, titleField, authorField, tagsField;
     @FXML private Button searchButton, refreshLibraryButton, clearButton;
     @FXML private Button modeSwitchButton;
     @FXML private TitledPane historyTitledPane;
-    @FXML   private FlowPane historyFlowPane;
+    @FXML private FlowPane historyFlowPane;
     @FXML private ImageView modeImageView;
     @FXML private Button myReviewsButton;
     @FXML private FontIcon myReviewsIcon;
@@ -101,34 +96,123 @@ public class Ao3Controller {
     @FXML private Button themeButton;
     @FXML private FontIcon settingsIcon;
     @FXML private FontIcon themeIcon;
-
-    // --- FXML UI Elements (For new design) ---
-    @FXML private BorderPane onlineSearchPane;   // The "Online Search" view
-    @FXML private SplitPane offlineSplitPane;    // The "Offline Library + Create" view
-    @FXML private VBox offlineLibraryPane; // The "Unlisted" + "My Library" part
-    @FXML private VBox createPane;         // The "Create" panel
+    @FXML private BorderPane onlineSearchPane;
+    @FXML private SplitPane offlineSplitPane;
+    @FXML private VBox offlineLibraryPane;
+    @FXML private VBox createPane;
     @FXML private Button addFicButton;
-    @FXML private Button deleteButton; // This is the new delete button in the offline view
+    @FXML private Button deleteButton;
     @FXML private ListView<Work> unlistedListView;
     @FXML private TilePane libraryTilePane;
-    @FXML private StackPane folderImagePane; // This is the new clickable StackPane
-    @FXML private FontIcon folderImageIcon;   // The '+' icon
-    @FXML private ImageView folderImageView; // The user's chosen image
+    @FXML private StackPane folderImagePane;
+    @FXML private FontIcon folderImageIcon;
+    @FXML private ImageView folderImageView;
     @FXML private TextField folderNameField;
     @FXML private TextArea folderDescriptionArea;
     @FXML private VBox addFicDropTarget;
     @FXML private ListView<Work> newFolderFicsListView;
     @FXML private Button createFolderButton;
 
+    private HistoryManager historyManager = new HistoryManager();
 
+    public Document getDocument(String url) throws IOException, InterruptedException {
+        final String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36";
+        System.out.println("DEBUG: Selenium connecting to URL -> " + url);
+
+        WebDriver driver = null;
+        int maxRetries = 3;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                System.out.println("DEBUG: Selenium attempt " + attempt + "...");
+                ChromeOptions options = new ChromeOptions();
+                options.addArguments("--headless=new");
+                options.addArguments("--user-agent=" + userAgent);
+                options.addArguments("--log-level=3");
+                options.addArguments("--disable-gpu");
+                options.addArguments("--blink-settings=imagesEnabled=false");
+
+                driver = new ChromeDriver(options);
+
+                // --- THIS IS THE FIX ---
+                // 1. Go to the base domain first to set a cookie
+                driver.get("https://archiveofourown.org/");
+
+                // 2. Add the cookie to bypass adult warnings
+                Cookie adultCookie = new Cookie("view_adult", "true");
+                driver.manage().addCookie(adultCookie);
+                System.out.println("DEBUG: 'view_adult=true' cookie added.");
+                // --- END OF FIX ---
+
+                // 3. Now, go to the actual target URL
+                driver.get(url);
+                System.out.println("DEBUG: Browser navigated to target URL: " + url);
+
+                try {
+                    // 4. Try to click "Proceed" as a fallback
+                    WebElement proceedButton = driver.findElement(By.cssSelector("form.adult input[type='submit'][value='Proceed']"));
+                    if (proceedButton != null) {
+                        System.out.println("DEBUG: Found 'Proceed' button (cookie might not have worked). Clicking it...");
+                        proceedButton.click();
+
+                        // 5. NEW: Smarter wait logic
+                        WebDriverWait wait = new WebDriverWait(driver, java.time.Duration.ofSeconds(10));
+                        if (url.contains("/works/")) {
+                            System.out.println("DEBUG: Waiting for story content (#workskin)...");
+                            wait.until(ExpectedConditions.presenceOfElementLocated(By.id("workskin")));
+                        } else if (url.contains("/users/")) {
+                            System.out.println("DEBUG: Waiting for profile content (#main)...");
+                            wait.until(ExpectedConditions.presenceOfElementLocated(By.id("main")));
+                        } else if (url.contains("/search")) {
+                            System.out.println("DEBUG: Waiting for search results (li.work or 'No results')...");
+                            wait.until(ExpectedConditions.or(
+                                    ExpectedConditions.presenceOfElementLocated(By.cssSelector("li.work.blurb")),
+                                    ExpectedConditions.presenceOfElementLocated(By.cssSelector("h4.heading:contains(No results found)"))
+                            ));
+                        }
+                        System.out.println("DEBUG: Page loaded after 'Proceed' click.");
+                    }
+                } catch (NoSuchElementException e) {
+                    System.out.println("DEBUG: 'Proceed' button not found (cookie worked or page is not adult).");
+                } catch (TimeoutException e) {
+                    throw new IOException("Failed to load page content after clicking 'Proceed'.", e);
+                }
+
+                // 6. Check for "Restricted" errors
+                try {
+                    WebElement flashError = driver.findElement(By.cssSelector("div.flash.error"));
+                    if (flashError != null && flashError.isDisplayed()) {
+                        System.err.println("DEBUG: AO3 returned a restriction error: " + flashError.getText());
+                    }
+                } catch (NoSuchElementException e) {
+                    // No error, this is good.
+                }
+
+                String finalHtml = driver.getPageSource();
+                System.out.println("DEBUG: Connection successful. Parsing with Jsoup...");
+                return Jsoup.parse(finalHtml);
+
+            } catch (Exception e) {
+                System.err.println("DEBUG: Selenium attempt " + attempt + " failed: " + e.getMessage());
+                if (attempt == maxRetries) {
+                    System.err.println("DEBUG: All retries failed.");
+                    throw e;
+                }
+                Thread.sleep(2000);
+            } finally {
+                if (driver != null) {
+                    driver.quit();
+                    System.out.println("DEBUG: WebDriver quit.");
+                }
+            }
+        }
+        throw new IOException("Failed to get document after all retries.");
+    }
 
     private Path getReviewsFilePath() {
-        // This method looks correct as a safety fallback.
-        // We will ensure libraryPath is properly initialized in the Ao3Controller's initialize method.
         if (libraryPath != null) {
             return libraryPath.resolve("reviews.json");
         }
-        // Fallback in case libraryPath isn't set
         try {
             Path path = Paths.get(System.getProperty("user.home"), "AO3_Offline_Library");
             if (!Files.exists(path)) Files.createDirectories(path);
@@ -142,62 +226,82 @@ public class Ao3Controller {
     private Map<String, UserReview> loadReviewMap() {
         Path path = getReviewsFilePath();
         if (path == null || !Files.exists(path)) {
-            return new HashMap<>(); // No file exists, return an empty map
-        }
-
-        Type type = new TypeToken<HashMap<String, UserReview>>() {}.getType();
-
-        // Declare the map outside the try-block so it can be returned
-        Map<String, UserReview> reviewMap = new HashMap<>();
-
-        // ✅ FIX: Use FileReader (for reading) and define the resource as 'reader'
-        try (FileReader reader = new FileReader(path.toFile())) {
-
-            // ✅ FIX: Remove the WRITER logic (gson.toJson(allFolders, writer);)
-
-            // Assign the parsed JSON to the map
-            reviewMap = gson.fromJson(reader, type);
-
-            // Handle case where file is empty or contains null (Gson can return null)
-            if (reviewMap == null) {
-                reviewMap = new HashMap<>();
-            }
-
-            // The reader automatically closes here.
-        } catch (IOException e) {
-            System.err.println("Could not load reviews file. Starting fresh.");
-            e.printStackTrace(); // Keep this for debugging if it fails
             return new HashMap<>();
         }
 
-        // Return the loaded map
+        Type type = new TypeToken<HashMap<String, UserReview>>() {}.getType();
+        Map<String, UserReview> reviewMap = new HashMap<>();
+
+        try (FileReader reader = new FileReader(path.toFile())) {
+            reviewMap = gson.fromJson(reader, type);
+            if (reviewMap == null) {
+                reviewMap = new HashMap<>();
+            }
+        } catch (IOException e) {
+            System.err.println("Could not load reviews file. Starting fresh.");
+            e.printStackTrace();
+            return new HashMap<>();
+        }
         return reviewMap;
+    }
+
+    private void displaySearchHistory() {
+        if (historyFlowPane == null) return;
+        historyFlowPane.getChildren().clear();
+        List<SearchQuery> history = historyManager.getHistory();
+        for (SearchQuery query : history) {
+            HBox tag = createHistoryTag(query);
+            historyFlowPane.getChildren().add(tag);
+        }
+    }
+
+    private HBox createHistoryTag(SearchQuery query) {
+        Label textLabel = new Label(query.toString());
+        Label deleteIcon = new Label(" \u2715");
+        deleteIcon.setStyle("-fx-font-weight: bold; -fx-cursor: hand;");
+
+        HBox tag = new HBox(5, textLabel, deleteIcon);
+        tag.setStyle("-fx-background-color: #383838; -fx-padding: 3 8 3 8; " +
+                "-fx-border-radius: 15; -fx-background-radius: 15; " +
+                "-fx-text-fill: white; -fx-cursor: hand;");
+        tag.setAlignment(Pos.CENTER);
+
+        tag.setOnMouseClicked(event -> {
+            anyField.setText(query.getAnyField());
+            titleField.setText(query.getTitle());
+            authorField.setText(query.getAuthor());
+            tagsField.setText(query.getTags());
+            onSearchButtonClick();
+        });
+
+        deleteIcon.setOnMouseClicked(event -> {
+            historyManager.deleteQuery(query);
+            historyFlowPane.getChildren().remove(tag);
+            event.consume();
+        });
+
+        return tag;
     }
 
     @FXML
     private void onMyReviewsClick() {
         try {
-            // 1. Load the "reviews.json" file
             Map<String, UserReview> reviewMap = loadReviewMap();
             if (reviewMap.isEmpty()) {
                 showInfo("No reviews found.", "You haven't written any reviews yet!");
                 return;
             }
 
-            // 2. Load the Review Library FXML
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/ReviewLibraryView.fxml"));
             Parent root = loader.load();
 
-            // 3. Get the controller and pass it the data
             ReviewLibraryController controller = loader.getController();
-            controller.loadReviews(reviewMap.values(), this); // Pass all reviews
+            controller.loadReviews(reviewMap.values(), this);
 
-            // 4. Create and show the new window
             Stage stage = new Stage();
             stage.setTitle("My Review Library");
             stage.setScene(new Scene(root));
 
-            // 5. Copy theme
             if (themeButton != null && themeButton.getScene() != null) {
                 stage.getScene().getStylesheets().addAll(themeButton.getScene().getStylesheets());
             }
@@ -210,19 +314,14 @@ public class Ao3Controller {
             showError("Could not open Review Library: " + e.getMessage());
         }
     }
-    // ✅ --- NEW: Label for the tooltip alternative ---
+
     @FXML private Label tooltipLabel;
     private final Gson gson = new Gson();
     private Path folderSaveFile;
-
-    // --- Data for new folder ---
     private String newFolderImagePath = null;
     private List<Work> ficsForNewFolder = new ArrayList<>();
-
     private FolderData currentEditingFolderData = null;
     private VBox currentEditingTile = null;
-
-    // --- Restored Properties ---
     private Path libraryPath;
     private Timeline clockTimeline;
     private boolean isOnlineMode = true;
@@ -230,14 +329,12 @@ public class Ao3Controller {
     private Image offlineModeIcon;
     private String darkThemePath;
 
-    // --- Restored: handleLaunchChat, openSpotify, openAuthorProfile ---
 
     @FXML
     private void openSpotify() {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/SpotifyView.fxml"));
             Parent root = loader.load();
-
             Stage stage = new Stage();
             stage.setTitle("Spotify Player");
             stage.setScene(new Scene(root));
@@ -249,10 +346,9 @@ public class Ao3Controller {
 
     public void openAuthorProfile(Work work) {
         if (work == null) {
-            return; // Safety check
+            return;
         }
 
-        // This is the safety check for "orphan_account" or "Anonymous"
         if (work.getAuthorUrl() == null) {
             System.out.println("Cannot open profile for " + work.getAuthor() + ". No URL provided.");
             showInfo("Profile Not Available", "Cannot open a profile for '" + work.getAuthor() + "'.");
@@ -264,23 +360,19 @@ public class Ao3Controller {
         System.out.println("Author URL: " + work.getAuthorUrl());
 
         try {
-            // 1. Load the FXML file
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/AuthorProfileView.fxml"));
             Parent root = loader.load();
 
-            // 2. Get the controller
             AuthorProfileController controller = loader.getController();
 
-            // 3. Pass the data to the new controller
+            controller.setMainController(this);
+
             controller.loadAuthorData(work.getAuthor(), work.getAuthorUrl());
 
-            // 4. Create and show the new window
             Stage stage = new Stage();
             stage.setTitle(work.getAuthor() + "'s Profile");
             stage.setScene(new Scene(root));
-
-            // This blocks the main window, which is good for a profile
-            stage.initModality(Modality.APPLICATION_MODAL);
+            stage.initModality(Modality.NONE);
             stage.show();
 
         } catch (IOException e) {
@@ -289,10 +381,30 @@ public class Ao3Controller {
         }
     }
 
+    public void openWork(String workUrl) {
+        openReadingView(workUrl);
+    }
+
+    private void openReadingView(String workUrl) {
+        System.out.println("--- OPENING READING VIEW FROM URL ---");
+        System.out.println("URL: " + workUrl);
+
+        Work workToOpen = findWorkInList(workUrl, resultsListView.getItems());
+
+        if (workToOpen != null) {
+            loadAndShowStory(workToOpen, resultsListView.getItems());
+        } else {
+            System.out.println("Work not in search results. Creating a temporary Work object.");
+            Work tempWork = new Work();
+            tempWork.setUrl(workUrl);
+            tempWork.setTitle("Loading Story...");
+            loadAndShowStory(tempWork, new ArrayList<>());
+        }
+    }
+
 
     @FXML
     public void initialize() {
-        // --- Load Mode Icons ---
         try {
             onlineModeIcon = new Image(getClass().getResourceAsStream("/JavaBeta/oslm.png"));
             offlineModeIcon = new Image(getClass().getResourceAsStream("/JavaBeta/ofslm.png"));
@@ -300,40 +412,29 @@ public class Ao3Controller {
             System.err.println("ERROR: Could not load mode icon images!");
         }
 
-        // --- Setup Button Icons ---
         if (myReviewsIcon != null) myReviewsIcon.setIconCode(FontAwesomeSolid.STAR);
         if (settingsIcon != null) settingsIcon.setIconCode(Elusive.COG);
         if (themeIcon != null) themeIcon.setIconCode(Entypo.ADJUST);
         if (deleteIcon != null) deleteIcon.setIconCode(FontAwesomeSolid.TRASH);
 
-        // Setup Library Path
         try {
             libraryPath = Paths.get(System.getProperty("user.home"), "AO3_Offline_Library");
             if (!Files.exists(libraryPath)) Files.createDirectories(libraryPath);
-
-            // --- ADDED: Setup folder save file and load existing folders ---
             folderSaveFile = libraryPath.resolve("folders.json");
             loadFolders();
-            // --- END OF ADDED CODE ---
-
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        // --- ✅ NEW: Configure "Online Search" ListView ---
-        if (resultsListView != null) {
-            // This tells the ListView to use your new controller class
-            // for every cell.
-            resultsListView.setCellFactory(listView -> new WorkCellController(this));
+        if (historyFlowPane != null) {
+            displaySearchHistory();
+        }
 
-            // Add a placeholder label
+        if (resultsListView != null) {
+            resultsListView.setCellFactory(listView -> new WorkCellController(this));
             resultsListView.setPlaceholder(new Label("No search results."));
         }
-        // --- ✅ OLD TABLEVIEW CODE REMOVED ---
 
-
-        // --- Configure "Offline Library" TableView (RESTORED) ---
-        // (This is for your *other* TableView, which is fine)
         if (libraryTitleColumn != null) { libraryTitleColumn.setCellValueFactory(new PropertyValueFactory<>("title")); }
         if (libraryAuthorColumn != null) { libraryAuthorColumn.setCellValueFactory(new PropertyValueFactory<>("author")); }
         if (libraryTagsColumn != null) { libraryTagsColumn.setCellValueFactory(new PropertyValueFactory<>("tags")); }
@@ -347,8 +448,6 @@ public class Ao3Controller {
             });
         }
 
-
-        // --- Configure "Unlisted" ListView (OFFLINE) ---
         if (unlistedListView != null) {
             unlistedListView.setPlaceholder(new Label("No unlisted fics found."));
             unlistedListView.setCellFactory(listView -> new WorkCellController(this));
@@ -357,7 +456,6 @@ public class Ao3Controller {
                 if (selectedWork != null) {
                     Dragboard db = unlistedListView.startDragAndDrop(TransferMode.COPY);
                     ClipboardContent content = new ClipboardContent();
-                    // We'll use the URL (which is the file path) as the unique identifier
                     content.putString(selectedWork.getUrl());
                     db.setContent(content);
                     event.consume();
@@ -369,10 +467,7 @@ public class Ao3Controller {
             newFolderFicsListView.setCellFactory(listView -> new WorkCellController(this));
         }
 
-
-        // --- Configure Drag-and-Drop (TARGET) ---
         if (addFicDropTarget != null) {
-            // 1. Accept the drag event
             addFicDropTarget.setOnDragOver(event -> {
                 if (event.getGestureSource() != addFicDropTarget && event.getDragboard().hasString()) {
                     event.acceptTransferModes(TransferMode.COPY);
@@ -380,26 +475,16 @@ public class Ao3Controller {
                 event.consume();
             });
 
-            // 2. Handle the drop event
             addFicDropTarget.setOnDragDropped(event -> {
                 Dragboard db = event.getDragboard();
                 boolean success = false;
                 if (db.hasString()) {
-                    // Get the URL (file path) from the dragboard
                     String workUrl = db.getString();
-
-                    // Use your helper method to find the matching Work object
                     Work workToAdd = findWorkInList(workUrl, unlistedListView.getItems());
                     List<Work> ficsForFolder = new ArrayList<>();
-
-                    // Add the fic if we found it and it's not already in the list
                     if (workToAdd != null && !ficsForNewFolder.contains(workToAdd)) {
-                        // Add to our internal data list
                         ficsForNewFolder.add(workToAdd);
-
-                        // Add just the title to the visual list
                         newFolderFicsListView.getItems().add(workToAdd);
-
                         success = true;
                     }
                 }
@@ -408,7 +493,6 @@ public class Ao3Controller {
             });
         }
 
-        // --- Initialize Split Pane State ---
         if (createPane != null) {
             createPane.setVisible(false);
             createPane.setManaged(false);
@@ -417,41 +501,27 @@ public class Ao3Controller {
             offlineSplitPane.setDividerPosition(0, 1.0);
         }
 
-        // Initialize Time Display
         setupClock();
-
-        // Set initial view to Online Mode
-        isOnlineMode = false; // Set to false so switchMode() correctly sets it to Online
-        switchMode(); // Call once to set the correct initial state
+        isOnlineMode = false;
+        switchMode();
     }
 
-    // --- "Create" Panel Methods ---
     @FXML
     private void handleAddFicClick() {
         if (createPane == null || offlineSplitPane == null) return;
         boolean isVisible = createPane.isVisible();
 
         if (isVisible) {
-            // --- HIDING THE PANE ---
             createPane.setVisible(false);
             createPane.setManaged(false);
             animateOfflineDividerTo(1.0);
-
-            // ✅ --- NEW: Always reset state when hiding ---
             currentEditingFolderData = null;
             currentEditingTile = null;
-            clearCreateForm(); // Clear the form *after* hiding
-
+            clearCreateForm();
         } else {
-            // --- SHOWING THE PANE ---
-
-            // ✅ --- NEW: Only clear form if we are NOT editing ---
             if (currentEditingFolderData == null) {
-                clearCreateForm(); // This is for "Create New"
+                clearCreateForm();
             }
-            // If we *are* editing, populateCreatePane() has already
-            // filled the form, so we don't clear it.
-
             createPane.setVisible(true);
             createPane.setManaged(true);
             animateOfflineDividerTo(0.5);
@@ -459,14 +529,9 @@ public class Ao3Controller {
     }
 
     private void handleModifyFolder(FolderData folderData, VBox folderTile) {
-        // 1. Store the folder and tile we are editing
         this.currentEditingFolderData = folderData;
         this.currentEditingTile = folderTile;
-
-        // 2. Populate the form fields
         populateCreatePane(folderData);
-
-        // 3. Show the "Create" pane (which now acts as an "Edit" pane)
         if (!createPane.isVisible()) {
             handleAddFicClick();
         }
@@ -477,7 +542,6 @@ public class Ao3Controller {
             return;
         }
 
-        // 1. Get all FolderData objects from the UI tiles
         List<FolderData> allFolders = new ArrayList<>();
         for (javafx.scene.Node node : libraryTilePane.getChildren()) {
             if (node.getUserData() instanceof FolderData) {
@@ -485,7 +549,6 @@ public class Ao3Controller {
             }
         }
 
-        // 2. Write the list to the JSON file
         try (FileWriter writer = new FileWriter(folderSaveFile.toFile())) {
             gson.toJson(allFolders, writer);
             System.out.println("Folders saved successfully to " + folderSaveFile);
@@ -496,26 +559,21 @@ public class Ao3Controller {
     }
 
     private void loadFolders() {
-        // --- ADD THESE TWO LINES ---
         if (libraryTilePane != null) {
             libraryTilePane.getChildren().clear();
         }
-        // --- END OF ADD ---
 
         if (folderSaveFile == null || !Files.exists(folderSaveFile)) {
             System.out.println("No folder save file found. Starting fresh.");
             return;
         }
 
-        // 1. Define the type for Gson (a List of FolderData)
         Type listType = new TypeToken<ArrayList<FolderData>>() {}.getType();
 
-        // 2. Read the file and convert it back to a List
         try (FileReader reader = new FileReader(folderSaveFile.toFile())) {
             List<FolderData> loadedFolders = gson.fromJson(reader, listType);
 
             if (loadedFolders != null) {
-                // 3. Re-create the visual tiles for each folder
                 for (FolderData folderData : loadedFolders) {
                     VBox folderTile = createFolderTile(folderData);
                     libraryTilePane.getChildren().add(folderTile);
@@ -528,21 +586,16 @@ public class Ao3Controller {
         }
     }
 
-    /**
-     * Helper method to fill all the form fields with an existing folder's data.
-     */
     private void populateCreatePane(FolderData data) {
         folderNameField.setText(data.name);
         folderDescriptionArea.setText(data.description);
 
-        // Populate the image
         newFolderImagePath = data.imagePath;
         if (newFolderImagePath != null && !newFolderImagePath.isBlank()) {
             try {
                 Image image = new Image(newFolderImagePath);
                 folderImageView.setImage(image);
 
-                // Re-apply the same viewport logic to keep it square
                 double width = image.getWidth();
                 double height = image.getHeight();
                 if (width != height) {
@@ -557,32 +610,27 @@ public class Ao3Controller {
                 folderImageView.setVisible(true);
                 folderImageIcon.setVisible(false);
             } catch (Exception e) {
-                // If image fails to load, reset to placeholder
                 folderImageView.setImage(null);
                 folderImageView.setViewport(null);
                 folderImageView.setVisible(false);
                 folderImageIcon.setVisible(true);
             }
         } else {
-            // Reset to placeholder if no image path
             folderImageView.setImage(null);
             folderImageView.setViewport(null);
             folderImageView.setVisible(false);
             folderImageIcon.setVisible(true);
         }
-        // ✅ --- FIX: Populate fics list from paths ---
         ficsForNewFolder.clear();
-        newFolderFicsListView.getItems().clear(); // Clear visual list too
+        newFolderFicsListView.getItems().clear();
 
         if (data.ficPaths != null) {
             for (String path : data.ficPaths) {
-                // Use your helper to find the full Work object from the master "Unlisted" list
                 Work work = findWorkInList(path, unlistedListView.getItems());
                 if (work != null) {
                     ficsForNewFolder.add(work);
                     newFolderFicsListView.getItems().add(work);
                 } else {
-                    // Fic might be missing or not loaded yet
                     System.err.println("Could not find fic for path: " + path);
                 }
             }
@@ -598,30 +646,21 @@ public class Ao3Controller {
 
         if (selectedFile != null) {
             try {
-                // We save the path, which is what your createFolder method needs
                 newFolderImagePath = selectedFile.toURI().toString();
                 Image image = new Image(newFolderImagePath);
 
-                // --- NEW AUTO-CROP LOGIC ---
                 double width = image.getWidth();
                 double height = image.getHeight();
 
                 if (width == height) {
-                    // It's already square, no viewport needed
                     folderImageView.setViewport(null);
                 } else {
-                    // It's rectangular. Find the smallest dimension.
                     double size = Math.min(width, height);
-
-                    // Calculate (x, y) to center the crop
                     double x = (width - size) / 2;
                     double y = (height - size) / 2;
-
-                    // Create and set the square viewport
                     Rectangle2D viewport = new Rectangle2D(x, y, size, size);
                     folderImageView.setViewport(viewport);
                 }
-                // --- END OF NEW LOGIC ---
 
                 folderImageView.setImage(image);
                 folderImageView.setVisible(true);
@@ -643,18 +682,15 @@ public class Ao3Controller {
             return;
         }
 
-        // --- THIS IS THE NEW LOGIC ---
         if (currentEditingFolderData != null) {
-            // --- MODIFY MODE ---
             currentEditingFolderData.name = folderName;
             currentEditingFolderData.description = description;
             currentEditingFolderData.imagePath = newFolderImagePath;
 
-            // ✅ --- FIX: Convert List<Work> to List<String>
             currentEditingFolderData.ficPaths.clear();
             currentEditingFolderData.ficPaths.addAll(
                     ficsForNewFolder.stream()
-                            .map(Work::getUrl) // Get the path (URL)
+                            .map(Work::getUrl)
                             .collect(Collectors.toList())
             );
 
@@ -666,15 +702,11 @@ public class Ao3Controller {
             currentEditingTile = null;
 
         } else {
-            // --- CREATE NEW MODE (Your old logic) ---
-
-            // ✅ --- FIX: Convert List<Work> to List<String>
             List<String> paths = ficsForNewFolder.stream()
-                    .map(Work::getUrl) // Get the path (URL)
+                    .map(Work::getUrl)
                     .collect(Collectors.toList());
 
             FolderData newFolderData = new FolderData(folderName, description, newFolderImagePath, paths);
-
             VBox folderTile = createFolderTile(newFolderData);
 
             if (libraryTilePane != null) {
@@ -685,8 +717,6 @@ public class Ao3Controller {
         handleAddFicClick();
         saveFolders();
     }
-
-
 
     private void clearCreateForm() {
         folderNameField.clear();
@@ -708,7 +738,6 @@ public class Ao3Controller {
         timeline.play();
     }
 
-    // --- RESTORED: setupClock ---
     private void setupClock() {
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm:ss a");
         if (timeLabel != null) {
@@ -725,27 +754,22 @@ public class Ao3Controller {
         clockTimeline.play();
     }
 
-    // ✅ --- Tooltip Alternative: Mouse Enter/Exit Methods ---
-    @FXML private void onModeSwitchEnter() { /* if (tooltipLabel != null) tooltipLabel.setText("Switch Mode"); */ }
-    @FXML private void onSettingsEnter() { /* if (tooltipLabel != null) tooltipLabel.setText("Settings"); */ }
-    @FXML private void onThemeEnter() { /* if (tooltipLabel != null) tooltipLabel.setText("Toggle Theme"); */ }
-    @FXML private void onChangePhotoEnter() { /* if (tooltipLabel != null) tooltipLabel.setText("Change Photo"); */ }
-    @FXML private void onRefreshEnter() { /* if (tooltipLabel != null) tooltipLabel.setText("Refresh Library"); */ }
-    @FXML private void onViewFolderEnter() { /* if (tooltipLabel != null) tooltipLabel.setText("View Folder"); */ }
-    @FXML private void onDeleteStoryEnter() { /* if (tooltipLabel != null) tooltipLabel.setText("Delete Selected Story"); */ }
-    @FXML private void onMouseExit() { /* if (tooltipLabel != null) tooltipLabel.setText(""); */ }
-
+    @FXML private void onModeSwitchEnter() { }
+    @FXML private void onSettingsEnter() { }
+    @FXML private void onThemeEnter() { }
+    @FXML private void onChangePhotoEnter() { }
+    @FXML private void onRefreshEnter() { }
+    @FXML private void onViewFolderEnter() { }
+    @FXML private void onDeleteStoryEnter() { }
+    @FXML private void onMouseExit() { }
 
     @FXML
     protected void switchMode() {
         isOnlineMode = !isOnlineMode;
         System.out.println("Switch Mode clicked. New state: " + (isOnlineMode ? "Online Search" : "Offline Library"));
 
-        // Toggle "Online Search" pane (this now controls the searchBox too)
         onlineSearchPane.setVisible(isOnlineMode);
         onlineSearchPane.setManaged(isOnlineMode);
-
-        // Toggle "Offline Library" pane (this now controls libraryControlsBox too)
         offlineSplitPane.setVisible(!isOnlineMode);
         offlineSplitPane.setManaged(!isOnlineMode);
 
@@ -754,20 +778,17 @@ public class Ao3Controller {
             if (unlistedListView != null) unlistedListView.getSelectionModel().clearSelection();
         } else {
             if (modeImageView != null) modeImageView.setImage(onlineModeIcon);
-            populateLibraryViews(); // This now correctly reloads your folders
+            populateLibraryViews();
             if (resultsListView != null) resultsListView.getSelectionModel().clearSelection();
         }
 
         if (createPane != null && createPane.isVisible()) {
-            handleAddFicClick(); // Hide it
+            handleAddFicClick();
         }
 
         if (loadingIndicator != null) loadingIndicator.setVisible(false);
     }
 
-    /**
-     * New method to populate BOTH offline lists.
-     */
     private void populateLibraryViews() {
         if (unlistedListView == null || libraryTilePane == null) return;
 
@@ -775,7 +796,6 @@ public class Ao3Controller {
         if (libraryPath == null) { return; }
 
         List<Work> offlineWorks = new ArrayList<>();
-        // ✅ NEW: List to hold paths of files to delete after the streams are closed
         List<Path> pathsToDelete = new ArrayList<>();
 
         try (Stream<Path> stream = Files.list(libraryPath)) {
@@ -784,25 +804,21 @@ public class Ao3Controller {
                             && !p.getFileName().toString().equals("reviews.json")
                             && !p.getFileName().toString().equals("folders.json"))
                     .forEach(path -> {
-                        // The FileReader is scoped to this inner try-with-resources block
                         try (FileReader reader = new FileReader(path.toFile())) {
                             Work offlineWork = gson.fromJson(reader, Work.class);
 
                             if (offlineWork != null && offlineWork.getUrl() != null
                                     && Files.exists(Paths.get(offlineWork.getUrl()))) {
-                                // File is valid and its HTML exists
                                 offlineWorks.add(offlineWork);
                             } else if (offlineWork != null) {
-                                // Orphaned metadata found (HTML missing) - MARK FOR DELETION
                                 System.out.println("Orphaned metadata found, marking for deletion: " + path.getFileName());
-                                pathsToDelete.add(path); // <-- MARK HERE
+                                pathsToDelete.add(path);
                             }
                         } catch (Exception e) {
                             System.err.println("Failed to read metadata file: " + path.getFileName());
                             e.printStackTrace();
-                            pathsToDelete.add(path); // Also delete if reading fails completely
+                            pathsToDelete.add(path);
                         }
-                        // The reader stream is closed here (end of the inner try-catch block)
                     });
 
         } catch (IOException e) {
@@ -810,7 +826,6 @@ public class Ao3Controller {
             showError("Could not read library directory: " + e.getMessage());
         }
 
-        // ✅ NEW: Execute deletions after the main stream is closed
         for (Path path : pathsToDelete) {
             try {
                 Files.deleteIfExists(path);
@@ -832,7 +847,6 @@ public class Ao3Controller {
             if (unlistedListView != null) {
                 selectedWork = unlistedListView.getSelectionModel().getSelectedItem();
             }
-            // TODO: Add selection logic for your TilePane here
         } else {
             if (libraryTableView != null) {
                 selectedWork = libraryTableView.getSelectionModel().getSelectedItem();
@@ -857,9 +871,9 @@ public class Ao3Controller {
                 Path filePath = Paths.get(work.getUrl());
                 if (Files.deleteIfExists(filePath)) {
                     if (isOnlineMode) {
-                        populateLibraryListView(); // Refresh old table
+                        populateLibraryListView();
                     } else {
-                        populateLibraryViews(); // Refresh new lists
+                        populateLibraryViews();
                     }
                 } else {
                     showError("Could not delete the file.");
@@ -895,6 +909,18 @@ public class Ao3Controller {
             showInfo("Please fill in at least one search field.");
             return;
         }
+        SearchQuery newQuery = new SearchQuery(
+                anyField.getText(),
+                titleField.getText(),
+                authorField.getText(),
+                tagsField.getText()
+        );
+
+        if (!newQuery.toString().isEmpty()){
+            historyManager.addQuery(newQuery);
+            displaySearchHistory();
+        }
+
         loadingIndicator.setVisible(true);
         searchButton.setDisable(true);
         clearButton.setDisable(true);
@@ -933,11 +959,9 @@ public class Ao3Controller {
     }
 
     private void populateLibraryListView() {
-        // ... (This is your old method, now replaced by populateLibraryViews) ...
     }
 
-    // --- RESTORED: All story loading methods ---
-    public void loadAndShowStory(Work work, List<Work> allWorks) {        // ---
+    public void loadAndShowStory(Work work, List<Work> allWorks) {
         Alert loadingAlert = new Alert(Alert.AlertType.INFORMATION);
         loadingAlert.setTitle("Loading Story");
         loadingAlert.setHeaderText("Please wait, fetching story content...");
@@ -947,10 +971,7 @@ public class Ao3Controller {
         Task<String> task = createFetchStoryTask(work);
         task.setOnSucceeded(e -> {
             loadingAlert.close();
-            // --- CHANGED ---
-            // Pass the allWorks list to the launch method
             launchReadingWindow(work, task.getValue(), allWorks);
-            // ---
         });
         task.setOnFailed(e -> {
             loadingAlert.close();
@@ -962,11 +983,11 @@ public class Ao3Controller {
 
     public void loadStoryFromLibrary(Work work) {
         if (work == null) return;
-        Path filePath = Paths.get(work.getUrl()); // Get path from 'url' field
+        Path filePath = Paths.get(work.getUrl());
 
         try {
             String content = Files.readString(filePath, StandardCharsets.UTF_8);
-            launchReadingWindow(work.getTitle(), content, true); // Pass flag for offline
+            launchReadingWindow(work.getTitle(), content, true);
         } catch (IOException | java.nio.file.InvalidPathException e) {
             showError("Could not read story file: " + e.getMessage());
         }
@@ -1005,7 +1026,6 @@ public class Ao3Controller {
         }
     }
 
-    // --- RESTORED: Helper Methods ---
     private String buildSearchQuery() {
         StringJoiner sj = new StringJoiner(" ");
         if(anyField != null) addQueryPart(sj, "", anyField.getText(), false);
@@ -1035,15 +1055,35 @@ public class Ao3Controller {
     }
     public void showCredits() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Credits");
-        // ... (rest of method) ...
+        alert.setTitle("Project Credits (Easter Egg Found!)");
+        alert.setHeaderText("AO3 JavaFX Port Beta - Development Team");
+
+        String content =
+                "Lead Developer | Scrum Master: CARONGOY, SIR CARL DOMINIC XV D.\n" +
+                        "Developer | Tester: BENJ, KIRBY D.\n" +
+                        "Developer | Ideation: MANAL, KIM ANDREI N.\n" +
+                        "Developer | Designer: NAVARRO, JOHANSEN L.\n" +
+                        "Developer | UI Designer: PENETRANTE, FRANCINE JAE J.\n\n" +
+
+                        "Special Thanks:\n" +
+                        " - Gson (Google): JSON Serialization\n" +
+                        " - Selenium WebDriver: Web Automation\n" +
+                        " - Jsoup: HTML Parsing\n" +
+                        " - Ikonli: Icon Library (FontAwesome, Entypo, etc.)\n" +
+                        " - Spotify Service: Music Integration\n\n" +
+                        "A beta project built for offline reading and enhanced search capabilities.";
+
+        alert.setContentText(content);
+        alert.getDialogPane().setPrefWidth(400);
+        alert.showAndWait();
     }
 
     @FXML
     protected void onSettingsButtonClick() {
-        System.out.println("Settings button clicked!");
-        showInfo("Settings", "Settings functionality not yet implemented.");
+        System.out.println("Settings button clicked! Showing credits.");
+        showCredits();
     }
+
     @FXML
     protected void onThemeButtonClick() {
         if (themeButton == null || themeButton.getScene() == null) {
@@ -1075,183 +1115,90 @@ public class Ao3Controller {
     private Work findWorkInList(String url, List<Work> list) {
         if (list == null) return null;
         for (Work work : list) {
-            // We use getUrl() because that's what we stored (the file path)
             if (work.getUrl().equals(url)) {
                 return work;
             }
         }
-        return null; // Not found
+        return null;
     }
 
-    // --- RESTORED: Web Scraping Tasks ---
     private Task<List<Work>> createFetchWorksTask(String query) {
         return new Task<>() {
             @Override
             protected List<Work> call() throws Exception {
                 List<Work> worksList = new ArrayList<>();
                 String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-                final String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36";
                 String url = "https://archiveofourown.org/works/search?work_search[query]=" + encodedQuery;
-                System.out.println("DEBUG: Connecting to URL -> " + url);
 
-                WebDriver driver = null; // Define driver here to close it in finally
-                int maxRetries = 3;
+                Document doc = getDocument(url);
 
-                for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                    try {
-                        System.out.println("DEBUG: Selenium attempt " + attempt + "...");
+                Elements workElements = doc.select("li.work.blurb");
 
-                        // ==========================================================
-                        // === 1. SET UP AND LAUNCH SELENIUM BROWSER (HEADLESS) ===
-                        // ==========================================================
-                        ChromeOptions options = new ChromeOptions();
-                        options.addArguments("--headless=new"); // Run hidden
-                        options.addArguments("--user-agent=" + userAgent);
-                        options.addArguments("--log-level=3"); // Suppress console noise
-                        options.addArguments("--disable-gpu");
-                        options.addArguments("--blink-settings=imagesEnabled=false"); // Don't load images
-
-                        driver = new ChromeDriver(options);
-
-                        // ==========================================================
-                        // === 2. NAVIGATE AND HANDLE "PROCEED" PAGE ===
-                        // ==========================================================
-                        driver.get(url);
-                        System.out.println("DEBUG: Browser navigated to URL.");
-
-                        try {
-                            // Look for the "Proceed" button. Be specific with the selector.
-                            WebElement proceedButton = driver.findElement(By.cssSelector("form.adult input[type='submit'][value='Proceed']"));
-
-                            if (proceedButton != null) {
-                                System.out.println("DEBUG: Found 'Proceed' button. Clicking it...");
-                                proceedButton.click();
-
-                                // Wait for the *new* page (search results) to load
-                                // Wait for EITHER the results OR the "No results" header
-                                WebDriverWait wait = new WebDriverWait(driver, java.time.Duration.ofSeconds(10));                                wait.until(ExpectedConditions.or(
-                                        ExpectedConditions.presenceOfElementLocated(By.cssSelector("li.work.blurb")),
-                                        ExpectedConditions.presenceOfElementLocated(By.cssSelector("h4.heading:contains(No results found)"))
-                                ));
-                                System.out.println("DEBUG: Search results page loaded.");
-                            }
-                        } catch (NoSuchElementException e) {
-                            // "Proceed" button wasn't found. We're on the results page.
-                            System.out.println("DEBUG: 'Proceed' button not found, assuming direct access.");
-                        } catch (TimeoutException e) {
-                            throw new IOException("Failed to load search results after clicking 'Proceed'.", e);
-                        }
-
-                        // ==========================================================
-                        // === 3. GET HTML AND HAND OFF TO JSOUP ===
-                        // ==========================================================
-                        String finalHtml = driver.getPageSource();
-                        Document doc = Jsoup.parse(finalHtml);
-
-                        // ==========================================================
-                        // === 4. YOUR EXISTING JSOUP LOGIC (UNCHANGED) ===
-                        // ==========================================================
-                        System.out.println("DEBUG: Connection successful. Parsing with Jsoup...");
-                        Elements workElements = doc.select("li.work.blurb");
-
-                        // ✅ --- THIS IS THE NEW CHECK ---
-                        if (workElements.isEmpty()) {
-                            Element noResultsHeader = doc.selectFirst("h4.heading:contains(No results found)");
-                            if (noResultsHeader == null) {
-                                System.err.println("DEBUG: Got 0 works, but no 'No results' message. AO3 structure might have changed.");
-                            } else {
-                                System.out.println("DEBUG: Found 'No results found' page.");
-                            }
-                        }
-                        // ✅ --- END OF CHECK ---
-
-                        for (Element workEl : workElements) {
-                            // ... (all your existing scraping logic) ...
-                            Element titleEl = workEl.selectFirst("h4.heading a[href^='/works/']");
-                            Element authorEl = workEl.selectFirst("a[rel=author]");
-                            Element dateEl = workEl.selectFirst("p.datetime");
-                            Element fandomEl = workEl.selectFirst("h5.fandoms a");
-                            Elements relationshipEls = workEl.select("li.relationships a");
-                            Elements characterEls = workEl.select("li.characters a");
-                            Elements tagElements = workEl.select("li.freeforms a.tag");
-
-                            if (titleEl != null && dateEl != null) {
-                                // ... (all your scraping logic for title, author, etc.) ...
-                                String title = titleEl.text();
-                                String workUrl = "https://archiveofourown.org" + titleEl.attr("href");
-                                String author;
-                                String authorUrl;
-
-                                if (authorEl != null) {
-                                    author = authorEl.text();
-                                    if (author.equals("orphan_account") || author.equals("Anonymous")) {
-                                        authorUrl = null;
-                                    } else {
-                                        authorUrl = "https://archiveofourown.org" + authorEl.attr("href");
-                                    }
-                                } else {
-                                    Element headingEl = workEl.selectFirst("h4.heading");
-                                    String headingText = (headingEl != null) ? headingEl.text() : "";
-                                    String[] headingParts = headingText.split(" by ");
-                                    if (headingParts.length > 1) {
-                                        author = headingParts[1];
-                                    } else {
-                                        author = "Anonymous";
-                                    }
-                                    authorUrl = null;
-                                }
-
-                                String lastUpdated = dateEl.text();
-                                String fandom = (fandomEl != null) ? fandomEl.text() : "N/A";
-                                String relationships = relationshipEls.stream().map(Element::text).collect(Collectors.joining(", "));
-                                String characters = characterEls.stream().map(Element::text).collect(Collectors.joining(", "));
-                                String tags = tagElements.stream().map(Element::text).collect(Collectors.joining(", "));
-                                // --- New, Correct Tag Scraping ---
-
-// Rating
-                                Element ratingEl = workEl.selectFirst("span.rating span.text");
-                                String rating = (ratingEl != null) ? ratingEl.text() : "Not Rated";
-
-// Category
-                                Element categoryEl = workEl.selectFirst("span.category span.text");
-                                String category = (categoryEl != null) ? categoryEl.text() : "No Category";
-
-// Warnings
-                                Element warningEl = workEl.selectFirst("span.warnings span.text");
-                                String warnings = (warningEl != null) ? warningEl.text() : "Creator Chose Not To Use Archive Warnings";
-
-// Completion Status
-                                Element completeEl = workEl.selectFirst("span.iswip span.text");
-                                String completionStatus = (completeEl != null) ? completeEl.text() : "Complete Work";
-
-                                Work newWork = new Work(title, author, workUrl, tags, lastUpdated,
-                                        rating, category, warnings, completionStatus,
-                                        fandom, relationships, characters);
-                                newWork.setAuthorUrl(authorUrl);
-                                worksList.add(newWork);
-                            }
-                        }
-
-                        // Success! Break out of the retry loop.
-                        break;
-
-                    } catch (Exception e) {
-                        System.err.println("DEBUG: Selenium attempt " + attempt + " failed: " + e.getMessage());
-                        if (attempt == maxRetries) {
-                            System.err.println("DEBUG: All retries failed.");
-                            throw e; // This will trigger the "onFailed" part of your Task
-                        }
-                        Thread.sleep(2000); // Wait 2 seconds before retry
-                    } finally {
-                        // ==========================================================
-                        // === 5. ALWAYS CLOSE THE BROWSER (VERY IMPORTANT) ===
-                        // ==========================================================
-                        if (driver != null) {
-                            driver.quit(); // Closes the browser and ends the process
-                            System.out.println("DEBUG: WebDriver quit.");
-                        }
+                if (workElements.isEmpty()) {
+                    Element noResultsHeader = doc.selectFirst("h4.heading:contains(No results found)");
+                    if (noResultsHeader == null) {
+                        System.err.println("DEBUG: Got 0 works, but no 'No results' message.");
+                    } else {
+                        System.out.println("DEBUG: Found 'No results found' page.");
                     }
-                } // --- END of Retry Logic ---
+                }
+
+                for (Element workEl : workElements) {
+                    Element titleEl = workEl.selectFirst("h4.heading a[href^='/works/']");
+                    Element authorEl = workEl.selectFirst("a[rel=author]");
+                    Element dateEl = workEl.selectFirst("p.datetime");
+                    Element fandomEl = workEl.selectFirst("h5.fandoms a");
+                    Elements relationshipEls = workEl.select("li.relationships a");
+                    Elements characterEls = workEl.select("li.characters a");
+                    Elements tagElements = workEl.select("li.freeforms a.tag");
+
+                    if (titleEl != null && dateEl != null) {
+                        String title = titleEl.text();
+                        String workUrl = "https://archiveofourown.org" + titleEl.attr("href");
+                        String author;
+                        String authorUrl;
+
+                        if (authorEl != null) {
+                            author = authorEl.text();
+                            if (author.equals("orphan_account") || author.equals("Anonymous")) {
+                                authorUrl = null;
+                            } else {
+                                authorUrl = "https://archiveofourown.org" + authorEl.attr("href");
+                            }
+                        } else {
+                            Element headingEl = workEl.selectFirst("h4.heading");
+                            String headingText = (headingEl != null) ? headingEl.text() : "";
+                            String[] headingParts = headingText.split(" by ");
+                            if (headingParts.length > 1) {
+                                author = headingParts[1];
+                            } else {
+                                author = "Anonymous";
+                            }
+                            authorUrl = null;
+                        }
+
+                        String lastUpdated = dateEl.text();
+                        String fandom = (fandomEl != null) ? fandomEl.text() : "N/A";
+                        String relationships = relationshipEls.stream().map(Element::text).collect(Collectors.joining(", "));
+                        String characters = characterEls.stream().map(Element::text).collect(Collectors.joining(", "));
+                        String tags = tagElements.stream().map(Element::text).collect(Collectors.joining(", "));
+
+                        Element ratingEl = workEl.selectFirst("span.rating span.text");
+                        String rating = (ratingEl != null) ? ratingEl.text() : "Not Rated";
+                        Element categoryEl = workEl.selectFirst("span.category span.text");
+                        String category = (categoryEl != null) ? categoryEl.text() : "No Category";
+                        Element warningEl = workEl.selectFirst("span.warnings span.text");
+                        String warnings = (warningEl != null) ? warningEl.text() : "Creator Chose Not To Use Archive Warnings";
+                        Element completeEl = workEl.selectFirst("span.iswip span.text");
+                        String completionStatus = (completeEl != null) ? completeEl.text() : "Complete Work";
+
+                        Work newWork = new Work(title, author, workUrl, tags, lastUpdated,
+                                rating, category, warnings, completionStatus,
+                                fandom, relationships, characters);
+                        newWork.setAuthorUrl(authorUrl);
+                        worksList.add(newWork);
+                    }
+                }
 
                 if (!worksList.isEmpty()) {
                     Thread.sleep(300);
@@ -1265,15 +1212,13 @@ public class Ao3Controller {
         return new Task<>() {
             @Override
             protected String call() throws Exception {
-                final String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36";
-                Document doc = Jsoup.connect(work.getUrl() + "?view_full_work=true")
-                        .userAgent(userAgent)
-                        .cookie("view_adult", "true") // ✅ Add this cookie
-                        .get();                Element workskin = doc.selectFirst("#workskin");
+                Document doc = getDocument(work.getUrl() + "?view_full_work=true");
+
+                Element workskin = doc.selectFirst("#workskin");
                 if (workskin == null) {
                     return "<html><body>Could not find story content. It might be a restricted work.</body></html>";
                 }
-                return workskin.html(); // Return HTML content
+                return workskin.html();
             }
         };
     }
@@ -1283,23 +1228,21 @@ public class Ao3Controller {
         String imagePath;
         List<String> ficPaths = new ArrayList<>();
 
-        // This constructor now correctly accepts a List<String>
         FolderData(String name, String description, String imagePath, List<String> ficPaths) {
             this.name = name;
             this.description = description;
             this.imagePath = imagePath;
-            this.ficPaths.addAll(ficPaths); // And adds the list
+            this.ficPaths.addAll(ficPaths);
         }
     }
     private VBox createFolderTile(FolderData folderData) {
-        VBox folderTile = new VBox(5); // 5px spacing
-        folderTile.setPrefSize(130, 130); // A good square size
+        VBox folderTile = new VBox(5);
+        folderTile.setPrefSize(130, 130);
         folderTile.setAlignment(Pos.CENTER);
         folderTile.setStyle("-fx-padding: 5; -fx-background-color: -fx-control-inner-background; -fx-cursor: hand;");
 
         folderTile.setUserData(folderData);
 
-        // --- Add Image Logic ---
         if (folderData.imagePath != null && !folderData.imagePath.isBlank()) {
             try {
                 ImageView tileImageView = new ImageView();
@@ -1309,7 +1252,6 @@ public class Ao3Controller {
                 Image tileImage = new Image(folderData.imagePath);
                 tileImageView.setImage(tileImage);
 
-                // Apply the square auto-crop viewport
                 double width = tileImage.getWidth();
                 double height = tileImage.getHeight();
                 if (width != height) {
@@ -1327,31 +1269,26 @@ public class Ao3Controller {
             folderTile.getChildren().add(createFolderPlaceholderIcon());
         }
 
-        // --- Add Name ---
         Label nameLabel = new Label(folderData.name);
         nameLabel.setWrapText(true);
         nameLabel.setTextAlignment(TextAlignment.CENTER);
         folderTile.getChildren().add(nameLabel);
 
-        // --- Add double-click event (to open) ---
         folderTile.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
                 try {
-                    // 1. Load the FXML
                     FXMLLoader loader = new FXMLLoader(getClass().getResource("/JavaBeta/FolderView.fxml"));
                     Parent root = loader.load();
                     FolderViewController controller = loader.getController();
 
-                    // 2. Set the main controller
                     controller.setMainController(this);
 
-                    // 3. Find all the full Work objects for this folder
                     List<Work> ficsForFolder = new ArrayList<>();
-                    List<Work> allOfflineWorks = unlistedListView.getItems(); // Get master list
+                    List<Work> allOfflineWorks = unlistedListView.getItems();
 
                     if (folderData.ficPaths != null) {
                         for (String pathString : folderData.ficPaths) {
-                            Work fic = findWorkInList(pathString, allOfflineWorks); // Use your helper
+                            Work fic = findWorkInList(pathString, allOfflineWorks);
                             if (fic != null) {
                                 ficsForFolder.add(fic);
                             } else {
@@ -1360,18 +1297,14 @@ public class Ao3Controller {
                         }
                     }
 
-                    // 4. Load the data into the folder controller
                     controller.loadFolder(folderData, ficsForFolder);
 
-                    // 5. Create the new scene
                     Scene newScene = new Scene(root);
 
-                    // 6. Copy themes
                     if (themeButton != null && themeButton.getScene() != null) {
                         newScene.getStylesheets().addAll(themeButton.getScene().getStylesheets());
                     }
 
-                    // 7. Create and show the new window (Stage)
                     Stage folderStage = new Stage();
                     folderStage.setTitle(folderData.name);
                     folderStage.setScene(newScene);
@@ -1385,7 +1318,6 @@ public class Ao3Controller {
             }
         });
 
-        // --- Add Right-Click Context Menu ---
         ContextMenu contextMenu = new ContextMenu();
         MenuItem modifyItem = new MenuItem("Modify Folder");
         MenuItem deleteItem = new MenuItem("Delete Folder");
@@ -1403,9 +1335,6 @@ public class Ao3Controller {
         return folderTile;
     }
 
-    /**
-     * Handles deleting the folder tile
-     */
     private void handleDeleteFolder(VBox folderTile) {
         Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
         confirmAlert.setTitle("Delete Folder");
@@ -1422,7 +1351,7 @@ public class Ao3Controller {
     private FontIcon createFolderPlaceholderIcon() {
         FontIcon placeholderIcon = new FontIcon("fa-folder");
         placeholderIcon.setIconSize(60);
-        placeholderIcon.setStyle("-fx-text-fill: #888888;"); // Give it a subtle color
+        placeholderIcon.setStyle("-fx-text-fill: #888888;");
         return placeholderIcon;
     }
 }

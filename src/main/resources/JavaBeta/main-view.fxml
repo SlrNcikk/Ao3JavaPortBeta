@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.image.Image?>
@@ -34,9 +33,15 @@
                         <ImageView fitHeight="53.0" fitWidth="137.0" onMouseClicked="#openSpotify" pickOnBounds="true" preserveRatio="true" styleClass="clickable-image" style="-fx-cursor: hand;"><image><Image url="@spot.png" /></image></ImageView>
                         <VBox />
 
-                        <Button fx:id="myReviewsButton" onAction="#onMyReviewsClick" text="My Review Library" styleClass="button" HBox.hgrow="ALWAYS">
+                        <Button fx:id="myReviewsButton" mnemonicParsing="false" onAction="#onMyReviewsClick"
+                                style="-fx-background-color: transparent; -fx-padding: 0; -fx-cursor: hand;"
+                                onMouseExited="#onMouseExit">
                             <graphic>
-                                <FontIcon fx:id="myReviewsIcon" iconLiteral="fa-star" />
+                                <ImageView fitHeight="53.0" fitWidth="137.0" pickOnBounds="true" preserveRatio="true">
+                                    <image>
+                                        <Image url="@virv.png" />
+                                    </image>
+                                </ImageView>
                             </graphic>
                         </Button>
 
@@ -82,17 +87,33 @@
                                     <RowConstraints />
                                 </rowConstraints>
                                 <Label text="Any Field:" GridPane.rowIndex="0" />
-                                <TextField fx:id="anyField" promptText="General search..." GridPane.columnIndex="1" GridPane.rowIndex="0" />
+                                <TextField fx:id="anyField" promptText="General search..." onAction="#onSearchButtonClick" GridPane.columnIndex="1" GridPane.rowIndex="0" />
                                 <Label text="Title:" GridPane.rowIndex="1" />
-                                <TextField fx:id="titleField" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                                <TextField fx:id="titleField" onAction="#onSearchButtonClick" GridPane.columnIndex="1" GridPane.rowIndex="1" />
                                 <Label text="Author:" GridPane.rowIndex="2" />
-                                <TextField fx:id="authorField" GridPane.columnIndex="1" GridPane.rowIndex="2" />
+                                <TextField fx:id="authorField" onAction="#onSearchButtonClick" GridPane.columnIndex="1" GridPane.rowIndex="2" />
                                 <Label text="Tags:" GridPane.rowIndex="3" />
-                                <TextField fx:id="tagsField" promptText="e.g., Fluff" GridPane.columnIndex="1" GridPane.rowIndex="3" />
+                                <TextField fx:id="tagsField" promptText="e.g., Fluff" onAction="#onSearchButtonClick" GridPane.columnIndex="1" GridPane.rowIndex="3" />
                             </GridPane>
-                            <HBox spacing="10.0">
-                                <Button fx:id="searchButton" maxWidth="1.7976931348623157E308" onAction="#onSearchButtonClick" text="Search" HBox.hgrow="ALWAYS" style="-fx-cursor: hand;" />
-                                <Button fx:id="clearButton" maxWidth="1.7976931348623157E3" onAction="#onClearButtonClick" text="Clear" HBox.hgrow="ALWAYS" style="-fx-cursor: hand;" />
+                            <HBox spacing="10.0" alignment="CENTER">
+                                <Button fx:id="searchButton" mnemonicParsing="false" onAction="#onSearchButtonClick"
+                                        style="-fx-background-color: transparent; -fx-padding: 0; -fx-cursor: hand;"
+                                         onMouseExited="#onMouseExit">
+                                    <graphic>
+                                        <ImageView fitHeight="53.0" fitWidth="110.0" pickOnBounds="true" preserveRatio="true">
+                                            <image><Image url="@search.png" /></image>
+                                        </ImageView>
+                                    </graphic>
+                                </Button>
+                                <Button fx:id="clearButton" mnemonicParsing="false" onAction="#onClearButtonClick"
+                                        style="-fx-background-color: transparent; -fx-padding: 0; -fx-cursor: hand;"
+                                         onMouseExited="#onMouseExit">
+                                    <graphic>
+                                        <ImageView fitHeight="53.0" fitWidth="110.0" pickOnBounds="true" preserveRatio="true">
+                                            <image><Image url="@clear.png" /></image>
+                                        </ImageView>
+                                    </graphic>
+                                </Button>
                             </HBox>
                             <TitledPane fx:id="historyTitledPane" text="Search History" collapsible="true" expanded="false" maxWidth="1.7976931348623157E308" style="-fx-font-weight: bold;">
                                 <content>

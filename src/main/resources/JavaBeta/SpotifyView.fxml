@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
-<?import javafx.scene.layout.*?>
 <?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+<?import org.kordamp.ikonli.javafx.FontIcon?>
 
-<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
-            fx:id="rootVBox" fx:controller="JavaBeta.SpotifyController"
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:id="rootVBox"
+            fx:controller="JavaBeta.SpotifyController"
             style="-fx-padding: 20;">
 
     <top>
@@ -25,18 +28,30 @@
             <Label fx:id="artistName" text="Artist" />
 
             <HBox alignment="CENTER" spacing="10">
-                <Button fx:id="previousButton" text="⏮ Prev" onAction="#onPrevious" />
-                <Button fx:id="playButton" text="▶ Play" onAction="#onPlay" />
-                <Button fx:id="pauseButton" text="⏸ Pause" onAction="#onPause" />
-                <Button fx:id="nextButton" text="⏭ Next" onAction="#onNext" />
+
+                <Button fx:id="previousButton" onAction="#onPrevious"
+                        text="⏮"
+                        style="-fx-font-size: 28; -fx-background-color: transparent; -fx-cursor: hand;"/>
+
+                <Button fx:id="playButton" onAction="#onPlay"
+                        text="▶"
+                        style="-fx-font-size: 28; -fx-text-fill:#1DB954; -fx-background-color: transparent; -fx-cursor: hand;"/>
+
+                <Button fx:id="pauseButton" onAction="#onPause"
+                        text="⏸"
+                        style="-fx-font-size: 28; -fx-background-color: transparent; -fx-cursor: hand;"/>
+
+                <Button fx:id="nextButton" onAction="#onNext"
+                        text="⏭"
+                        style="-fx-font-size: 28; -fx-background-color: transparent; -fx-cursor: hand;"/>
             </HBox>
         </VBox>
     </left>
 
     <center>
         <VBox spacing="15">
-            <TextField fx:id="searchField" promptText="Search for a song..." maxWidth="Infinity"/>
-            <Button fx:id="searchButton" text="Search" maxWidth="Infinity"/>
+            <TextField fx:id="searchField" promptText="Search for a song..." maxWidth="Infinity" onAction="#onSearch"/>
+            <Button fx:id="searchButton" text="Search" maxWidth="Infinity" onAction="#onSearch"/>
 
             <ListView fx:id="searchResultsList" prefHeight="150" maxWidth="Infinity" VBox.vgrow="ALWAYS" />
 

@@ -8,219 +8,267 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TextArea;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.VBox;
-import org.jsoup.Jsoup;
+import javafx.scene.control.Button;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class AuthorProfileController {
 
-    // --- FXML Fields ---
+    private static class Ao3Item {
+        private final String title;
+        private final String url;
+
+        public Ao3Item(String title, String url) {
+            this.title = title;
+            this.url = url;
+        }
+
+        public String getUrl() { return url; }
+
+        @Override
+        public String toString() { return title; }
+    }
+
     @FXML private ImageView pfpImageView;
     @FXML private VBox profileDetailsBox;
     @FXML private TextArea personalNoteArea;
     @FXML private Label authorNameLabel;
-
     @FXML private Tab creationsTab;
     @FXML private Tab bookmarksTab;
     @FXML private Tab collectionsTab;
+    @FXML private ListView<Ao3Item> creationsListView;
+    @FXML private ListView<Ao3Item> bookmarksListView;
+    @FXML private ListView<Ao3Item> collectionsListView;
+    @FXML private Button refreshCreationsButton;
+    @FXML private Button refreshBookmarksButton;
+    @FXML private Button refreshCollectionsButton;
 
-    @FXML private ListView<String> creationsListView;
-    @FXML private ListView<String> bookmarksListView;
-    @FXML private ListView<String> collectionsListView;
+    private String authorBaseUrl;
+    private String authorPseudUrl;
 
-    // --- Class Fields ---
-    private String authorUrl;
+    private Ao3Controller mainController;
 
-    /**
-     * This method is called once the FXML is loaded.
-     * We set up listeners to load tab content *only* when a tab is clicked.
-     */
+    public void setMainController(Ao3Controller mainController) {
+        this.mainController = mainController;
+    }
+
     @FXML
     private void initialize() {
         creationsTab.setOnSelectionChanged(event -> {
             if (creationsTab.isSelected()) {
-                loadCreations();
+                loadTabContent("/works", "li.work", creationsListView, "No creations found.");
             }
         });
-
         bookmarksTab.setOnSelectionChanged(event -> {
             if (bookmarksTab.isSelected()) {
-                loadBookmarks();
+                loadTabContent("/bookmarks", "li.bookmark", bookmarksListView, "No bookmarks found.");
             }
         });
-
         collectionsTab.setOnSelectionChanged(event -> {
             if (collectionsTab.isSelected()) {
-                loadCollections();
+                loadTabContent("/collections", "li.collection", collectionsListView, "No collections found.");
             }
         });
+
+        refreshCreationsButton.setOnAction(event -> {
+            creationsListView.getItems().clear();
+            loadTabContent("/works", "li.work", creationsListView, "No creations found.");
+        });
+        refreshBookmarksButton.setOnAction(event -> {
+            bookmarksListView.getItems().clear();
+            loadTabContent("/bookmarks", "li.bookmark", bookmarksListView, "No bookmarks found.");
+        });
+        refreshCollectionsButton.setOnAction(event -> {
+            collectionsListView.getItems().clear();
+            loadTabContent("/collections", "li.collection", collectionsListView, "No collections found.");
+        });
+
+        creationsListView.setOnMouseClicked(this::handleItemClick);
+        bookmarksListView.setOnMouseClicked(this::handleItemClick);
+        collectionsListView.setOnMouseClicked(this::handleItemClick);
+
+        personalNoteArea.setEditable(false);
+        personalNoteArea.setWrapText(true);
     }
 
-    /**
-     * This is the main entry point, called by MainController.
-     * It scrapes the main profile info (PFP, Joined Date, Bio).
-     */
-    public void loadAuthorData(String authorName, String authorUrl) {
-        this.authorUrl = authorUrl;
-        authorNameLabel.setText(authorName);
+    public void loadAuthorData(String initialAuthorName, String initialAuthorUrl) {
+        this.authorPseudUrl = initialAuthorUrl;
+        this.authorBaseUrl = initialAuthorUrl.replaceAll("/pseuds/.*", "");
 
-        // Start a new thread for network scraping
+        authorNameLabel.setText("Loading profile for " + initialAuthorName + "...");
+
         new Thread(() -> {
             try {
-                Document doc = Jsoup.connect(authorUrl).get();
+                if (mainController == null) {
+                    throw new IOException("MainController was not provided to AuthorProfileController.");
+                }
+                Document doc = mainController.getDocument(authorPseudUrl);
 
-                // 1. Scrape PFP
-                Element pfpElement = doc.select("img.icon").first();
-                String pfpUrl = (pfpElement != null) ? pfpElement.attr("abs:src") : null;
-                Image pfpImage = (pfpUrl != null) ? new Image(pfpUrl) : null;
+                System.out.println("DEBUG: Scraping for PFP...");
+                Element pfpElement = doc.select("div.profile.module p.icon img").first();
+                String pfpUrl = null;
 
-                // 2. Scrape Profile Details (Joined, Bio)
-                Element joinedElement = doc.select("dt:contains(Joined:) + dd").first();
-                String joinedDate = (joinedElement != null) ? joinedElement.text() : "Unknown";
+                if (pfpElement != null) {
+                    System.out.println("DEBUG: Found pfpElement with selector 'div.profile.module p.icon img'.");
+                    pfpUrl = pfpElement.attr("abs:src");
+                } else {
+                    System.out.println("DEBUG: Selector 'div.profile.module p.icon img' FAILED.");
+                    System.out.println("DEBUG: Trying fallback selector 'div.profile img'...");
+                    pfpElement = doc.select("div.profile img").first();
+
+                    if (pfpElement != null) {
+                        System.out.println("DEBUG: Fallback selector 'div.profile img' SUCCESS.");
+                        pfpUrl = pfpElement.attr("abs:src");
+                    } else {
+                        System.out.println("DEBUG: Fallback selector 'div.profile img' FAILED.");
+                        System.out.println("DEBUG: Trying final fallback 'img.icon'...");
+                        pfpElement = doc.select("img.icon").first();
+                        if(pfpElement != null) {
+                            System.out.println("DEBUG: Final fallback 'img.icon' SUCCESS.");
+                            pfpUrl = pfpElement.attr("abs:src");
+                        } else {
+                            System.out.println("DEBUG: All PFP selectors FAILED.");
+                        }
+                    }
+                }
+
+                System.out.println("DEBUG: Final pfpUrl is: " + pfpUrl);
+
+                Image pfpImage = (pfpUrl != null && !pfpUrl.isEmpty()) ? new Image(pfpUrl, true) : null;
+
+                Element nameElement = doc.select("h2.user.heading").first();
+                String officialAuthorName = (nameElement != null) ? nameElement.text().trim() : initialAuthorName;
+
+                Element joinedElement = doc.select("div.profile.module dt:contains(Joined:) + dd").first();
+                String joinedDate = (joinedElement != null) ? joinedElement.text().trim() : "Unknown";
 
                 Element bioElement = doc.select("div.bio.module blockquote.userstuff").first();
-                String bioText = (bioElement != null) ? bioElement.html() : "No bio provided.";
+                String bioText = (bioElement != null) ? bioElement.html().trim() : "No bio provided.";
 
-                // Update the UI on the JavaFX thread
+                Element noteElement = doc.select("div.note.module blockquote.userstuff").first();
+                String noteText = (noteElement != null) ? noteElement.html().trim() : "No personal note.";
+
+                final Image finalPfpImage = pfpImage;
+                final String finalOfficialAuthorName = officialAuthorName;
+                final String finalJoinedDate = joinedDate;
+                final String finalBioText = bioText;
+                final String finalNoteText = noteText;
+
                 Platform.runLater(() -> {
-                    if (pfpImage != null) {
-                        pfpImageView.setImage(pfpImage);
+                    authorNameLabel.setText(finalOfficialAuthorName);
+
+                    if (finalPfpImage != null) {
+                        pfpImageView.setImage(finalPfpImage);
+
+                        finalPfpImage.errorProperty().addListener((obs, oldVal, newVal) -> {
+                            if (newVal) {
+                                System.err.println("JavaFX Error: Failed to load image from URL: " + finalPfpImage.getUrl());
+                                finalPfpImage.getException().printStackTrace();
+                            }
+                        });
+
+                    } else {
+                        System.out.println("DEBUG: pfpImage object is null. Setting ImageView to null.");
+                        pfpImageView.setImage(null);
                     }
 
-                    // Build the "Profile Details" VBox dynamically
                     profileDetailsBox.getChildren().clear();
-                    Label joinedLabel = new Label("Joined: " + joinedDate);
+                    Label joinedLabel = new Label("Joined: " + finalJoinedDate);
                     joinedLabel.setWrapText(true);
 
                     Label bioHeader = new Label("Bio:");
                     bioHeader.setStyle("-fx-font-weight: bold; -fx-padding: 10 0 0 0;");
 
-                    Label bioLabel = new Label(bioText.replaceAll("<br>", "\n").replaceAll("<[^>]*>", "")); // Basic HTML to text
+                    Label bioLabel = new Label(cleanHtml(finalBioText));
                     bioLabel.setWrapText(true);
 
                     profileDetailsBox.getChildren().addAll(joinedLabel, bioHeader, bioLabel);
+
+                    personalNoteArea.setText(cleanHtml(finalNoteText));
                 });
 
             } catch (Exception e) {
                 e.printStackTrace();
-                Platform.runLater(() -> profileDetailsBox.getChildren().add(new Label("Failed to load profile.")));
+                Platform.runLater(() -> {
+                    authorNameLabel.setText("Error loading profile.");
+                    profileDetailsBox.getChildren().add(new Label("Failed to load profile: " + e.getMessage()));
+                    personalNoteArea.setText("Error loading personal note.");
+                });
             }
         }).start();
     }
 
-    /**
-     * Scrapes the author's creations (works) page.
-     * This is called when the "Creations" tab is clicked.
-     */
-    private void loadCreations() {
-        // Don't re-load if we already have data
-        if (!creationsListView.getItems().isEmpty()) return;
-
-        creationsListView.getItems().add("Loading creations...");
+    private void loadTabContent(String pagePath, String itemSelector, ListView<Ao3Item> listView, String emptyMessage) {
+        Platform.runLater(() -> {
+            listView.getItems().clear();
+            listView.getItems().add(new Ao3Item("Loading " + pagePath.substring(1) + "...", ""));
+        });
 
         new Thread(() -> {
             try {
-                String creationsUrl = authorUrl + "/works";
-                Document doc = Jsoup.connect(creationsUrl).get();
-                Elements workElements = doc.select("li.work");
+                String url = authorBaseUrl + pagePath;
+                if (mainController == null) {
+                    throw new IOException("MainController was not provided to AuthorProfileController.");
+                }
 
-                List<String> workTitles = new ArrayList<>();
-                for (Element work : workElements) {
-                    String title = work.select("h4.heading a").first().text();
-                    workTitles.add(title);
+                Document doc = mainController.getDocument(url);
+
+                Elements itemElements = doc.select(itemSelector);
+
+                List<Ao3Item> items = new ArrayList<>();
+                for (Element item : itemElements) {
+                    Element linkElement = item.select("h4.heading a").first();
+                    if (linkElement != null) {
+                        String title = linkElement.text();
+                        String itemUrl = linkElement.attr("abs:href");
+                        items.add(new Ao3Item(title, itemUrl));
+                    }
                 }
 
                 Platform.runLater(() -> {
-                    creationsListView.getItems().clear();
-                    if (workTitles.isEmpty()) {
-                        creationsListView.getItems().add("No creations found.");
+                    listView.getItems().clear();
+                    if (items.isEmpty()) {
+                        listView.getItems().add(new Ao3Item(emptyMessage, ""));
                     } else {
-                        creationsListView.getItems().addAll(workTitles);
+                        listView.getItems().addAll(items);
                     }
                 });
 
             } catch (Exception e) {
                 e.printStackTrace();
-                Platform.runLater(() -> creationsListView.getItems().setAll("Failed to load creations."));
+                Platform.runLater(() -> listView.getItems().setAll(new Ao3Item("Failed to load " + pagePath.substring(1) + ".", "")));
             }
         }).start();
     }
 
-    /**
-     * Scrapes the author's bookmarks page.
-     * This is called when the "Bookmarks" tab is clicked.
-     */
-    private void loadBookmarks() {
-        if (!bookmarksListView.getItems().isEmpty()) return;
-        bookmarksListView.getItems().add("Loading bookmarks...");
+    private void handleItemClick(MouseEvent event) {
+        if (event.getClickCount() == 2) {
+            @SuppressWarnings("unchecked")
+            ListView<Ao3Item> clickedList = (ListView<Ao3Item>) event.getSource();
+            Ao3Item selectedItem = clickedList.getSelectionModel().getSelectedItem();
 
-        new Thread(() -> {
-            try {
-                String bookmarksUrl = authorUrl + "/bookmarks";
-                Document doc = Jsoup.connect(bookmarksUrl).get();
-                Elements bookmarkElements = doc.select("li.bookmark"); // AO3 uses "li.bookmark"
-
-                List<String> bookmarkTitles = new ArrayList<>();
-                for (Element bookmark : bookmarkElements) {
-                    String title = bookmark.select("h4.heading a").first().text();
-                    bookmarkTitles.add(title);
+            if (selectedItem != null && !selectedItem.getUrl().isEmpty()) {
+                if (mainController != null) {
+                    mainController.openWork(selectedItem.getUrl());
+                } else {
+                    System.err.println("Error: MainController is null. Cannot open work.");
                 }
-
-                Platform.runLater(() -> {
-                    bookmarksListView.getItems().clear();
-                    if (bookmarkTitles.isEmpty()) {
-                        bookmarksListView.getItems().add("No bookmarks found.");
-                    } else {
-                        bookmarksListView.getItems().addAll(bookmarkTitles);
-                    }
-                });
-
-            } catch (Exception e) {
-                // ✅ FIX: Changed e.FprintStackTrace() to e.printStackTrace()
-                e.printStackTrace();
-                Platform.runLater(() -> bookmarksListView.getItems().setAll("Failed to load bookmarks."));
             }
-        }).start();
+        }
     }
 
-    /**
-     * Scrapes the author's collections page.
-     * This is called when the "Collections" tab is clicked.
-     */
-    private void loadCollections() {
-        if (!collectionsListView.getItems().isEmpty()) return;
-        collectionsListView.getItems().add("Loading collections...");
-
-        new Thread(() -> {
-            try {
-                String collectionsUrl = authorUrl + "/collections";
-                Document doc = Jsoup.connect(collectionsUrl).get();
-                Elements collectionElements = doc.select("li.collection"); // AO3 uses "li.collection"
-
-                List<String> collectionTitles = new ArrayList<>();
-                for (Element collection : collectionElements) {
-                    String title = collection.select("h4.heading a").first().text();
-                    collectionTitles.add(title);
-                }
-
-                Platform.runLater(() -> {
-                    collectionsListView.getItems().clear();
-                    if (collectionTitles.isEmpty()) {
-                        collectionsListView.getItems().add("No collections found.");
-                    } else {
-                        collectionsListView.getItems().addAll(collectionTitles);
-                    }
-                });
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                Platform.runLater(() -> collectionsListView.getItems().setAll("Failed to load collections."));
-            }
-        }).start();
+    private String cleanHtml(String html) {
+        if (html == null) return "";
+        return html.replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)</p>", "\n\n")
+                .replaceAll("<[^>]*>", "")
+                .trim();
     }
 }

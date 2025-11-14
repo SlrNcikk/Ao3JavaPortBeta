@@ -77,13 +77,12 @@ public class SpotifyController {
                 }
             }
         });
-        // --- END OF FIX ---
 
         startTrackRefresh();
     }
     private void startTrackRefresh() {
         trackRefreshTimeline = new Timeline(
-                new KeyFrame(Duration.seconds(10), event -> refreshTrackInfo())
+                new KeyFrame(Duration.seconds(5), event -> refreshTrackInfo())
         );
         trackRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
         trackRefreshTimeline.play();
@@ -223,7 +222,6 @@ public class SpotifyController {
                     return; // Stop the thread
                 }
 
-                // ✅ --- THIS IS THE FIX --- ✅
                 // Check if 'item' is null (e.g., an Ad is playing)
                 if (!trackJson.has("item") || trackJson.get("item").isJsonNull()) {
                     Platform.runLater(() -> {
@@ -234,7 +232,6 @@ public class SpotifyController {
                     });
                     return; // Stop the thread
                 }
-                // --- END OF FIX ---
 
                 // --- B: SOMETHING IS PLAYING ---
                 // Now it's safe to get the item

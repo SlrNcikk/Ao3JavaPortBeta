@@ -23,10 +23,7 @@ public class FolderViewController {
         this.mainController = mainController;
     }
 
-    /**
-     * This is the main method to populate the view with data.
-     * It now accepts the pre-loaded list of fics from the main controller.
-     */
+
     public void loadFolder(Ao3Controller.FolderData folderData, List<Work> fics) {        folderNameLabel.setText(folderData.name);
         folderDescriptionLabel.setText(folderData.description);
 
@@ -43,7 +40,6 @@ public class FolderViewController {
             folderImageView.setImage(null);
         }
 
-        // 3. Populate Fic List (Now it's simple!)
         if (worksListView != null) {
             // Set the cell factory to use your custom WorkCell
             worksListView.setCellFactory(listView -> new WorkCellController(mainController));
@@ -64,12 +60,6 @@ public class FolderViewController {
         }
     }
 
-    // We no longer need the parseWorkFromPath() method, as the main controller
-    // is handling all the data logic.
-
-    /**
-     * Applies the center-square crop to the folder image
-     */
     private void applyViewport(Image image) {
         double width = image.getWidth();
         double height = image.getHeight();
